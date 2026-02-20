@@ -185,6 +185,7 @@ BY_EXCLUSIONS = {
     "numbers", "hand", "the", "a", "an", "owner", "seller", "appointment",
     "local", "estate", "unknown", "anonymous", "various", "multiple",
     "me", "us", "them", "request", "design", "nature", "mail",
+    "cal", "so", "la",  # abbreviations for California, Southern, Los Angeles
 }
 
 KNOWN_ARTISTS = {
@@ -196,6 +197,76 @@ KNOWN_ARTISTS = {
     "okeefe", "o'keeffe", "rivera", "kahlo", "botero",
     "thiebaud", "diebenkorn", "ruscha", "baldessari",
 }
+
+# Words that signal end of a name (common in art listing titles)
+NAME_STOP_WORDS = {
+    # media & surface
+    "oil", "on", "canvas", "acrylic", "watercolor", "painting", "print",
+    "lithograph", "etching", "engraving", "serigraph", "giclee",
+    # condition & framing
+    "original", "framed", "signed", "large", "small", "vintage", "antique",
+    "unfinished", "matted", "mounted",
+    # art terms
+    "art", "artwork", "piece", "gallery", "museum", "rare", "proof",
+    "style", "scene", "geometric", "impressionist", "surreal",
+    # adjectives
+    "beautiful", "stunning", "gorgeous", "amazing", "exceptional", "fine",
+    "great", "new", "old", "modern", "contemporary",
+    # genres
+    "abstract", "landscape", "portrait", "still", "life", "floral",
+    # prepositions & connectors
+    "with", "and", "the", "from", "for", "in", "of", "at", "to", "or",
+    # misc listing words
+    "mid", "century", "listed", "numbered", "hand", "painted", "wrap",
+    # animals & objects (common false captures)
+    "tiger", "cubs", "cat", "cats", "dog", "horse", "flower", "flowers",
+    "raccoon", "fish", "clown", "bird", "pirate", "ship", "street",
+    # places
+    "hong", "kong", "paris", "east", "coast", "native", "american",
+    # meta
+    "who", "has", "work", "archetype", "best", "offer",
+    # misc false positives
+    "jewish", "men", "boy", "blue", "fisherman", "lake", "nostalgic",
+    "number",
+}
+
+# Full-name rejects: these get captured as names but aren't
+NAME_REJECTS = {
+    "artist", "by artist", "the artist", "by the artist",
+    "surf", "proof", "signature", "israeli artist",
+}
+
+
+_NAME_PREFIX_STRIP = {
+    "artist", "listed", "california", "american", "haitian", "cuban",
+    "french", "italian", "chinese", "canadian", "mexican", "spanish",
+    "local", "renowned", "famous", "famed",
+}
+
+
+def _clean_name(name):
+    """Trim leading prefixes and trailing stop words from a captured name."""
+    words = name.split()
+    # Strip leading qualifiers: "California Artist Susie Cartt" → "Susie Cartt"
+    while words and words[0].lower() in _NAME_PREFIX_STRIP:
+        words.pop(0)
+    # Strip trailing stop words
+    while words and words[-1].lower() in NAME_STOP_WORDS:
+        words.pop()
+    return " ".join(words)
+
+
+def _valid_name(name):
+    """Check if a cleaned name looks like an actual person name."""
+    if not name or len(name) < 3:
+        return False
+    if name.lower() in NAME_REJECTS:
+        return False
+    # Reject single very short words (TAR, Cal, etc.) — likely abbreviations
+    words = name.split()
+    if len(words) == 1 and len(name) < 4:
+        return False
+    return True
 
 
 def parse_artist(title):
@@ -211,36 +282,43 @@ def parse_artist(title):
     # Pattern 1: "... by [Name]" — highest confidence
     m = re.search(r'\bby\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})', t)
     if m:
-        name = m.group(1).strip()
-        first_word = name.split()[0].lower()
-        if first_word not in BY_EXCLUSIONS and len(name) > 2:
+        name = _clean_name(m.group(1).strip())
+        first_word = name.split()[0].lower() if name else ""
+        if first_word not in BY_EXCLUSIONS and _valid_name(name):
             return name, "high"
 
-    # Pattern 2: "Signed [Name]" or "Signature [Name]"
+    # Pattern 2: "Signed [Name]" — max 2 words, name must start uppercase
     m = re.search(
-        r'\b(?:signed|signature)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
-        t, re.IGNORECASE,
+        r'\b[Ss][Ii][Gg][Nn][Ee][Dd]\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})',
+        t,
     )
+    if not m:
+        m = re.search(
+            r'\b[Ss][Ii][Gg][Nn][Aa][Tt][Uu][Rr][Ee]\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})',
+            t,
+        )
     if m:
-        name = m.group(1).strip()
-        if len(name) > 2 and name.lower() not in {"on", "in", "and", "the", "by"}:
+        name = _clean_name(m.group(1).strip())
+        if _valid_name(name):
             return name, "medium"
 
-    # Pattern 3: "Artist [Name]" or "Artist: [Name]"
+    # Pattern 3: "Artist [Name]" or "Artist: [Name]" — name must start uppercase
     m = re.search(
-        r'\bartist:?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
-        t, re.IGNORECASE,
+        r'\b[Aa][Rr][Tt][Ii][Ss][Tt]:?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})',
+        t,
     )
     if m:
-        name = m.group(1).strip()
-        if len(name) > 2:
+        name = _clean_name(m.group(1).strip())
+        if _valid_name(name):
             return name, "medium"
 
-    # Pattern 4: Known famous names anywhere in title
+    # Pattern 4: Known famous names — word boundary match to avoid substrings
     t_lower = t.lower()
     for artist in KNOWN_ARTISTS:
-        if artist in t_lower:
-            idx = t_lower.index(artist)
+        pattern = r'\b' + re.escape(artist) + r'\b'
+        match = re.search(pattern, t_lower)
+        if match:
+            idx = match.start()
             found = t[idx:idx + len(artist)]
             return found.title(), "low"
 
