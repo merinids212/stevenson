@@ -7,859 +7,718 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
     --font: 'IBM Plex Mono', monospace;
-    --black: #000;
-    --white: #fff;
-    --gray: #999;
-    --light: #f5f5f5;
-    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --bg: #0a0a0a;
+    --fg: #e8e8e8;
+    --dim: #444;
+    --mute: #2a2a2a;
+    --accent: #fff;
+    --red: #ff3b30;
+    --green: #30d158;
   }
 
   html, body {
     font-family: var(--font);
-    background: var(--white);
-    color: var(--black);
+    background: var(--bg);
+    color: var(--fg);
     -webkit-font-smoothing: antialiased;
   }
 
   ::-webkit-scrollbar { width: 0; }
 
-  /* NAV */
-  nav {
+  /* ─── TOPBAR ─── */
+  .topbar {
     position: fixed;
     top: 0; left: 0; width: 100%;
-    height: 64px;
+    height: 48px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: var(--white);
+    padding: 0 24px;
+    background: var(--bg);
     z-index: 100;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--mute);
   }
 
-  .nav-back {
-    position: absolute; left: 20px; top: 50%;
-    transform: translateY(-50%);
-    background: none; border: none; cursor: pointer;
-    font-size: 22px; color: var(--black);
+  .topbar a {
+    color: var(--dim);
     text-decoration: none;
-    transition: opacity 0.2s;
-  }
-  .nav-back:hover { opacity: 0.5; }
-
-  .nav-title {
-    font-size: 14px; font-weight: 500;
-    letter-spacing: 0.05em; text-transform: uppercase;
+    font-size: 18px;
+    transition: color 0.15s;
   }
 
-  /* LAYOUT */
-  .page { padding: 84px 24px 60px; max-width: 1200px; margin: 0 auto; }
+  .topbar a:hover { color: var(--fg); }
 
-  .section {
-    margin-bottom: 56px;
+  .topbar-title {
+    margin-left: 16px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
   }
 
-  .section-title {
-    font-size: 12px; font-weight: 500;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    margin-bottom: 20px; color: var(--gray);
+  .topbar-live {
+    margin-left: auto;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  /* STATS ROW */
-  .stats-row {
+  .topbar-live::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ─── HERO STATS ─── */
+  .hero {
+    padding: 80px 24px 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-    margin-bottom: 48px;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--mute);
   }
 
-  .stat-card {
-    background: var(--light);
-    padding: 20px;
-    border-radius: 2px;
+  @media (max-width: 900px) { .hero { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 500px) { .hero { grid-template-columns: repeat(2, 1fr); } }
+
+  .hero-stat {
+    padding: 32px 24px 40px;
+    border-right: 1px solid var(--mute);
   }
 
-  .stat-card .label {
-    font-size: 10px; text-transform: uppercase;
-    letter-spacing: 0.05em; color: var(--gray);
-    margin-bottom: 8px;
+  .hero-stat:last-child { border-right: none; }
+
+  .hero-stat .num {
+    font-size: 48px;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--accent);
   }
 
-  .stat-card .value {
-    font-size: 22px; font-weight: 500;
+  .hero-stat .lbl {
+    margin-top: 12px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
   }
 
-  .stat-card .sub {
-    font-size: 11px; color: var(--gray); margin-top: 4px;
+  .hero-stat .sub {
+    margin-top: 4px;
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.02em;
   }
 
-  /* CHARTS */
-  .chart-row {
+  /* ─── SECTIONS ─── */
+  .section {
+    border-bottom: 1px solid var(--mute);
+  }
+
+  .section-head {
+    padding: 20px 24px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+    border-bottom: 1px solid var(--mute);
+  }
+
+  /* ─── CHART GRID ─── */
+  .chart-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 32px;
-    margin-bottom: 16px;
   }
 
-  @media (max-width: 768px) {
-    .chart-row { grid-template-columns: 1fr; }
-  }
+  @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 
-  .chart-card {
-    background: var(--light);
+  .chart-cell {
     padding: 24px;
-    border-radius: 2px;
+    border-right: 1px solid var(--mute);
+    border-bottom: 1px solid var(--mute);
+    position: relative;
   }
 
-  .chart-card h3 {
-    font-size: 11px; font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.04em;
+  .chart-cell:nth-child(2n) { border-right: none; }
+
+  .chart-cell h3 {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
     margin-bottom: 16px;
   }
 
   .chart-wrap {
     position: relative;
-    height: 280px;
+    height: 240px;
   }
 
-  /* FILTER BAR */
+  /* ─── WIDE CHART ─── */
+  .chart-wide {
+    padding: 24px;
+    border-bottom: 1px solid var(--mute);
+  }
+
+  .chart-wide h3 {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 16px;
+  }
+
+  .chart-wide .chart-wrap { height: 200px; }
+
+  /* ─── STRIP BARS (custom, no chart.js) ─── */
+  .strip-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 24px;
+  }
+
+  .strip-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .strip-bar .bar-label {
+    width: 90px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .strip-bar .bar-track {
+    flex: 1;
+    height: 20px;
+    background: var(--mute);
+    position: relative;
+  }
+
+  .strip-bar .bar-fill {
+    height: 100%;
+    background: var(--fg);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .strip-bar .bar-val {
+    width: 48px;
+    font-size: 10px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── FILTER BAR ─── */
   .filter-bar {
-    display: flex; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 24px;
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--mute);
+    overflow-x: auto;
   }
 
   .filter-bar button {
     font-family: var(--font);
-    font-size: 11px; letter-spacing: 0.02em;
+    font-size: 9px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    background: var(--light); border: none;
-    padding: 6px 14px; cursor: pointer;
-    color: var(--gray);
-    transition: all 0.2s;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--mute);
+    padding: 12px 16px;
+    cursor: pointer;
+    color: var(--dim);
+    transition: all 0.15s;
+    white-space: nowrap;
   }
+
+  .filter-bar button:last-child { border-right: none; }
 
   .filter-bar button.active {
-    background: var(--black); color: var(--white);
+    background: var(--accent);
+    color: var(--bg);
   }
 
-  .filter-bar button:hover {
-    color: var(--black);
+  .filter-bar button:hover:not(.active) {
+    color: var(--fg);
   }
 
-  .filter-bar button.active:hover {
-    color: var(--white);
-  }
-
-  /* TABLE */
+  /* ─── TABLE ─── */
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .data-table th {
     text-align: left;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 10px 12px;
-    border-bottom: 2px solid var(--black);
-    color: var(--gray);
+    letter-spacing: 0.08em;
+    font-size: 9px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--mute);
+    color: var(--dim);
     cursor: pointer;
     user-select: none;
-    transition: color 0.2s;
+    transition: color 0.15s;
   }
 
-  .data-table th:hover { color: var(--black); }
-  .data-table th.sorted { color: var(--black); }
+  .data-table th:hover { color: var(--fg); }
+  .data-table th.sorted { color: var(--accent); }
 
   .data-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 8px 16px;
+    border-bottom: 1px solid #151515;
     vertical-align: middle;
+    color: var(--fg);
   }
 
   .data-table tr:hover td {
-    background: #fafafa;
+    background: #111;
   }
 
   .data-table .thumb {
-    width: 40px; height: 40px;
-    object-fit: cover; border-radius: 2px;
+    width: 36px; height: 36px;
+    object-fit: cover;
   }
 
   .data-table .title-cell {
-    max-width: 300px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .data-table a {
-    color: var(--black);
+    color: var(--fg);
     text-decoration: none;
-    border-bottom: 1px solid #ddd;
-    transition: border-color 0.2s;
+    transition: color 0.15s;
   }
 
-  .data-table a:hover { border-color: var(--black); }
+  .data-table a:hover { color: var(--accent); }
 
   .tag {
     display: inline-block;
-    font-size: 9px;
+    font-size: 8px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 2px 6px;
-    background: #eee;
-    border-radius: 1px;
-    margin-right: 4px;
+    letter-spacing: 0.05em;
+    padding: 2px 5px;
+    border: 1px solid var(--mute);
+    margin-right: 3px;
     margin-bottom: 2px;
+    color: var(--dim);
   }
 
-  .tag.medium { background: #e8f0e8; }
-  .tag.style { background: #eee8f0; }
-  .tag.deal { background: #ffe8e0; }
+  .tag.style { border-color: #333; color: var(--fg); }
+  .tag.medium { border-color: #2a3a2a; color: #6a9a6a; }
+
+  .score-pill {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
 
   .pagination {
-    display: flex; gap: 8px; justify-content: center;
-    margin-top: 16px;
+    display: flex;
+    gap: 0;
+    justify-content: center;
+    padding: 0;
+    border-bottom: 1px solid var(--mute);
   }
 
   .pagination button {
     font-family: var(--font);
-    font-size: 11px;
-    background: none; border: 1px solid #ddd;
-    padding: 6px 14px; cursor: pointer;
-    transition: all 0.2s;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--mute);
+    border-left: 1px solid var(--mute);
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--dim);
+    transition: all 0.15s;
   }
 
-  .pagination button:hover { border-color: var(--black); }
-  .pagination button:disabled { opacity: 0.3; cursor: default; }
+  .pagination button:hover:not(:disabled) { color: var(--accent); }
+  .pagination button:disabled { opacity: 0.2; cursor: default; }
+
+  .pagination .page-info {
+    font-size: 9px;
+    padding: 10px 16px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    padding: 40px 24px;
+    text-align: center;
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
 </style>
 </head>
 <body>
 
-<nav>
-  <a class="nav-back" href="index.html">&#8249;</a>
-  <span class="nav-title">Analytics</span>
-</nav>
-
-<div class="page">
-
-  <!-- TOP STATS -->
-  <div class="stats-row" id="stats-row"></div>
-
-  <!-- CLIP SCORES -->
-  <div class="section">
-    <div class="section-title">CLIP Quality Analysis</div>
-    <div class="chart-row">
-      <div class="chart-card">
-        <h3>Art Score Distribution</h3>
-        <div class="chart-wrap"><canvas id="chart-art-score"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>CLIP Style Classification</h3>
-        <div class="chart-wrap"><canvas id="chart-clip-style"></canvas></div>
-      </div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card">
-        <h3>Quality vs Uniqueness</h3>
-        <div class="chart-wrap"><canvas id="chart-quality-unique"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Avg Art Score by Region</h3>
-        <div class="chart-wrap"><canvas id="chart-score-region"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CHARTS -->
-  <div class="section">
-    <div class="section-title">Distribution</div>
-    <div class="chart-row">
-      <div class="chart-card">
-        <h3>Listings by Region</h3>
-        <div class="chart-wrap"><canvas id="chart-region"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Price Distribution</h3>
-        <div class="chart-wrap"><canvas id="chart-price-dist"></canvas></div>
-      </div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card">
-        <h3>Medium Breakdown</h3>
-        <div class="chart-wrap"><canvas id="chart-medium"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Avg Price by Medium</h3>
-        <div class="chart-wrap"><canvas id="chart-medium-price"></canvas></div>
-      </div>
-    </div>
-    <div class="chart-row">
-      <div class="chart-card">
-        <h3>Style Tags</h3>
-        <div class="chart-wrap"><canvas id="chart-style"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Avg Price by Region (Top 10)</h3>
-        <div class="chart-wrap"><canvas id="chart-region-price"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- DEALS TABLE -->
-  <div class="section">
-    <div class="section-title">Explorer</div>
-    <div class="filter-bar" id="explorer-filters">
-      <button class="active" data-ef="all">All</button>
-      <button data-ef="top-rated">Top Rated</button>
-      <button data-ef="deals">Deals</button>
-      <button data-ef="oil">Oil</button>
-      <button data-ef="acrylic">Acrylic</button>
-      <button data-ef="watercolor">Watercolor</button>
-      <button data-ef="landscape">Landscape</button>
-      <button data-ef="portrait">Portrait</button>
-      <button data-ef="abstract-clip">Abstract</button>
-      <button data-ef="signed">Signed</button>
-    </div>
-    <table class="data-table" id="explorer-table">
-      <thead>
-        <tr>
-          <th></th>
-          <th class="sorted" data-sort="title">Title</th>
-          <th data-sort="price">Price</th>
-          <th data-sort="region">Region</th>
-          <th data-sort="medium">Tags</th>
-          <th data-sort="art_score">Art Score</th>
-        </tr>
-      </thead>
-      <tbody id="explorer-body"></tbody>
-    </table>
-    <div class="pagination" id="pagination"></div>
-  </div>
-
+<div class="topbar">
+  <a href="index.html">&#8249;</a>
+  <span class="topbar-title">Stevenson Analytics</span>
+  <span class="topbar-live" id="live-count">1,393 listings</span>
 </div>
 
+<!-- HERO -->
+<div class="hero" id="hero"></div>
+
+<!-- CLIP ANALYSIS -->
+<div class="section">
+  <div class="section-head">CLIP Model Output</div>
+  <div class="chart-grid">
+    <div class="chart-cell">
+      <h3>Art Score Distribution</h3>
+      <div class="chart-wrap"><canvas id="chart-art-score"></canvas></div>
+    </div>
+    <div class="chart-cell">
+      <h3>Quality vs Uniqueness</h3>
+      <div class="chart-wrap"><canvas id="chart-quality-unique"></canvas></div>
+    </div>
+  </div>
+  <div id="clip-style-strip"></div>
+</div>
+
+<!-- MARKET DATA -->
+<div class="section">
+  <div class="section-head">Market Data</div>
+  <div class="chart-grid">
+    <div class="chart-cell">
+      <h3>Price Distribution</h3>
+      <div class="chart-wrap"><canvas id="chart-price-dist"></canvas></div>
+    </div>
+    <div class="chart-cell">
+      <h3>Avg Art Score by Region</h3>
+      <div class="chart-wrap"><canvas id="chart-score-region"></canvas></div>
+    </div>
+  </div>
+  <div id="region-strip"></div>
+  <div id="medium-strip"></div>
+</div>
+
+<!-- EXPLORER -->
+<div class="section">
+  <div class="section-head">Explorer</div>
+  <div class="filter-bar" id="explorer-filters">
+    <button class="active" data-ef="all">All</button>
+    <button data-ef="top-rated">Top Rated</button>
+    <button data-ef="deals">Deals</button>
+    <button data-ef="oil">Oil</button>
+    <button data-ef="acrylic">Acrylic</button>
+    <button data-ef="watercolor">Watercolor</button>
+    <button data-ef="landscape">Landscape</button>
+    <button data-ef="portrait">Portrait</button>
+    <button data-ef="abstract-clip">Abstract</button>
+    <button data-ef="signed">Signed</button>
+  </div>
+  <table class="data-table" id="explorer-table">
+    <thead>
+      <tr>
+        <th></th>
+        <th class="sorted" data-sort="title">Title</th>
+        <th data-sort="price">Price</th>
+        <th data-sort="region">Region</th>
+        <th>Tags</th>
+        <th data-sort="art_score">Score</th>
+      </tr>
+    </thead>
+    <tbody id="explorer-body"></tbody>
+  </table>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<div class="footer">Stevenson &mdash; California Paintings Index &mdash; CLIP ViT-B/32</div>
+
 <script>
-const REGION_LABELS = {
-  losangeles: 'LA', sfbay: 'SF Bay', sandiego: 'San Diego',
-  sacramento: 'Sacramento', fresno: 'Fresno', bakersfield: 'Bakersfield',
-  orangecounty: 'OC', inlandempire: 'Inland Empire', ventura: 'Ventura',
-  santabarbara: 'Santa Barbara', stockton: 'Stockton', modesto: 'Modesto',
-  visalia: 'Visalia', merced: 'Merced', monterey: 'Monterey',
-  chico: 'Chico', redding: 'Redding', humboldt: 'Humboldt',
-  mendocino: 'Mendocino', goldcountry: 'Gold Country', susanville: 'Susanville',
-  yubasutter: 'Yuba-Sutter', palmsprings: 'Palm Springs', imperial: 'Imperial',
-  slo: 'SLO', hanford: 'Hanford', siskiyou: 'Siskiyou',
+const RL = {
+  losangeles:'LA', sfbay:'SF Bay', sandiego:'SD', sacramento:'Sac',
+  fresno:'Fresno', bakersfield:'Bako', orangecounty:'OC',
+  inlandempire:'IE', ventura:'Ventura', santabarbara:'SB',
+  stockton:'Stockton', modesto:'Modesto', visalia:'Visalia',
+  merced:'Merced', monterey:'Monterey', chico:'Chico',
+  redding:'Redding', humboldt:'Humboldt', mendocino:'Mendo',
+  goldcountry:'Gold', susanville:'Susan', yubasutter:'Yuba',
+  palmsprings:'PS', imperial:'Imperial', slo:'SLO',
+  hanford:'Hanford', siskiyou:'Siskiyou',
 };
 
-// ─── CLASSIFICATION ENGINE ───
+// ─── NLP ───
+const MEDIUMS = { oil:/\boil\b/i, acrylic:/\bacrylic\b/i, watercolor:/\bwater\s?colou?r\b/i, pastel:/\bpastel\b/i, gouache:/\bgouache\b/i, spray:/\bspray\b/i, ink:/\bink\b/i, mixed:/\bmixed\s?media\b/i, print:/\bprint\b|\blithograph\b|\bserigraph\b|\bgiclee\b/i };
+const FLAGS = { signed:/\bsigned\b|\bsignature\b/i, framed:/\bframed\b|\bframe\b/i, large:/\blarge\b|\bhuge\b|\boversized\b|\b\d{2,3}\s*x\s*\d{2,3}\b/i, original:/\boriginal\b/i };
 
-const MEDIUMS = {
-  oil: /\boil\b/i,
-  acrylic: /\bacrylic\b/i,
-  watercolor: /\bwater\s?colou?r\b/i,
-  pastel: /\bpastel\b/i,
-  gouache: /\bgouache\b/i,
-  spray: /\bspray\b/i,
-  ink: /\bink\b/i,
-  mixed: /\bmixed\s?media\b/i,
-  print: /\bprint\b|\blithograph\b|\bserigraph\b|\bgiclee\b/i,
-};
-
-const STYLES = {
-  abstract: /\babstract\b/i,
-  impressionist: /\bimpressionis/i,
-  modern: /\bmodern\b/i,
-  vintage: /\bvintage\b|\bantique\b/i,
-  contemporary: /\bcontemporary\b/i,
-  surreal: /\bsurreal/i,
-  folk: /\bfolk\b|\bnaive\b|\bprimitive\b/i,
-  pop: /\bpop\s?art\b/i,
-  realism: /\brealis/i,
-};
-
-const SUBJECTS = {
-  landscape: /\blandscape\b|\bseascape\b|\bmountain\b|\bocean\b|\bbeach\b|\bsunset\b/i,
-  portrait: /\bportrait\b|\bface\b|\bwoman\b|\bman\b|\bnude\b/i,
-  still_life: /\bstill\s?life\b|\bflower\b|\bfloral\b|\bvase\b|\bfruit\b/i,
-  cityscape: /\bcity\b|\burban\b|\bstreet\b|\bbuilding\b/i,
-  animal: /\banimal\b|\bhorse\b|\bdog\b|\bcat\b|\bbird\b/i,
-};
-
-const FLAGS = {
-  signed: /\bsigned\b|\bsignature\b/i,
-  framed: /\bframed\b|\bframe\b/i,
-  large: /\blarge\b|\bhuge\b|\boversized\b|\b\d{2,3}\s*x\s*\d{2,3}\b|\b[3-9]\s*ft\b|\b[3-9]\s*foot\b/i,
-  original: /\boriginal\b/i,
-};
-
-function classify(title) {
-  const t = title;
-  const tags = { mediums: [], styles: [], subjects: [], flags: [] };
-
-  for (const [k, rx] of Object.entries(MEDIUMS)) {
-    if (rx.test(t)) tags.mediums.push(k);
-  }
-  for (const [k, rx] of Object.entries(STYLES)) {
-    if (rx.test(t)) tags.styles.push(k);
-  }
-  for (const [k, rx] of Object.entries(SUBJECTS)) {
-    if (rx.test(t)) tags.subjects.push(k);
-  }
-  for (const [k, rx] of Object.entries(FLAGS)) {
-    if (rx.test(t)) tags.flags.push(k);
-  }
-
+function classify(t) {
+  const tags = { mediums:[], flags:[] };
+  for (const [k,rx] of Object.entries(MEDIUMS)) if (rx.test(t)) tags.mediums.push(k);
+  for (const [k,rx] of Object.entries(FLAGS)) if (rx.test(t)) tags.flags.push(k);
   return tags;
 }
 
-// "Deal score" — lower price relative to similar items = better deal
-function computeDealScores(items) {
-  // Group by primary medium, compute median price per group
-  const groups = {};
-  for (const item of items) {
-    const key = item.tags.mediums[0] || 'unknown';
-    if (!groups[key]) groups[key] = [];
-    if (item.price) groups[key].push(item.price);
-  }
-  const medians = {};
-  for (const [k, prices] of Object.entries(groups)) {
-    const sorted = prices.sort((a, b) => a - b);
-    medians[k] = sorted[Math.floor(sorted.length / 2)] || 100;
-  }
-
-  for (const item of items) {
-    if (!item.price) { item.dealScore = 0; continue; }
-    const key = item.tags.mediums[0] || 'unknown';
-    const median = medians[key];
-    // Score: how much below median (capped at 100)
-    const ratio = (median - item.price) / median;
-    // Bonus for signed, original, framed
-    let bonus = 0;
-    if (item.tags.flags.includes('signed')) bonus += 0.15;
-    if (item.tags.flags.includes('original')) bonus += 0.15;
-    if (item.tags.flags.includes('framed')) bonus += 0.1;
-    item.dealScore = Math.round(Math.min(100, Math.max(0, (ratio + bonus) * 100)));
+function computeDeals(items) {
+  const g = {};
+  for (const i of items) { const k = i.tags.mediums[0]||'x'; if(!g[k])g[k]=[]; if(i.price)g[k].push(i.price); }
+  const m = {};
+  for (const [k,p] of Object.entries(g)) { const s=p.sort((a,b)=>a-b); m[k]=s[Math.floor(s.length/2)]||100; }
+  for (const i of items) {
+    if(!i.price){i.dealScore=0;continue;}
+    const k=i.tags.mediums[0]||'x', r=(m[k]-i.price)/m[k];
+    let b=0; if(i.tags.flags.includes('signed'))b+=.15; if(i.tags.flags.includes('original'))b+=.15; if(i.tags.flags.includes('framed'))b+=.1;
+    i.dealScore=Math.round(Math.min(100,Math.max(0,(r+b)*100)));
   }
 }
 
-// ─── CHART DEFAULTS ───
-
+// ─── CHART THEME ───
 Chart.defaults.font.family = "'IBM Plex Mono', monospace";
-Chart.defaults.font.size = 10;
-Chart.defaults.color = '#999';
+Chart.defaults.font.size = 9;
+Chart.defaults.color = '#444';
 Chart.defaults.plugins.legend.display = false;
+Chart.defaults.scales.linear = { ...Chart.defaults.scales.linear, grid: { color: '#1a1a1a' }, border: { color: '#2a2a2a' } };
 
-const CHART_BG = [
-  '#000', '#333', '#555', '#777', '#999', '#aaa', '#bbb', '#ccc', '#ddd', '#eee',
-  '#2a2a2a', '#444', '#666', '#888',
-];
+// ─── DATA ───
+let allItems = [], explorerItems = [], currentPage = 0, currentSort = { key:'art_score', dir:-1 };
+const PAGE_SIZE = 30;
 
-// ─── MAIN ───
+fetch('paintings.json').then(r=>r.json()).then(data => {
+  allItems = data.filter(p=>p.images&&p.images.length>0).map(p=>({...p, tags:classify(p.title)}));
+  computeDeals(allItems);
+  document.getElementById('live-count').textContent = allItems.length.toLocaleString() + ' listings';
+  renderHero();
+  renderCharts();
+  applyExplorerFilter('all');
+});
 
-let allItems = [];
-let explorerItems = [];
-let currentPage = 0;
-let currentSort = { key: 'title', dir: 1 };
-let currentEFilter = 'all';
-const PAGE_SIZE = 25;
+// ─── HERO ───
+function renderHero() {
+  const pr = allItems.filter(p=>p.price).map(p=>p.price).sort((a,b)=>a-b);
+  const sc = allItems.filter(p=>p.art_score!=null).map(p=>p.art_score).sort((a,b)=>a-b);
+  const regions = new Set(allItems.map(p=>p.region));
+  const top = allItems.filter(p=>p.art_score>=55);
+  const med = pr.length ? pr[Math.floor(pr.length/2)] : 0;
+  const medArt = sc.length ? sc[Math.floor(sc.length/2)] : 0;
 
-fetch('paintings.json')
-  .then(r => r.json())
-  .then(data => {
-    allItems = data
-      .filter(p => p.images && p.images.length > 0)
-      .map(p => ({ ...p, tags: classify(p.title) }));
-
-    computeDealScores(allItems);
-    renderStats();
-    renderCharts();
-    applyExplorerFilter('all');
-  });
-
-// ─── STATS ───
-
-function renderStats() {
-  const priced = allItems.filter(p => p.price);
-  const prices = priced.map(p => p.price).sort((a, b) => a - b);
-  const regions = new Set(allItems.map(p => p.region));
-  const withMedium = allItems.filter(p => p.tags.mediums.length > 0);
-  const deals = allItems.filter(p => p.dealScore >= 60);
-
-  const scored = allItems.filter(p => p.art_score != null);
-  const artScores = scored.map(p => p.art_score).sort((a, b) => a - b);
-  const medianArt = artScores.length ? artScores[Math.floor(artScores.length / 2)] : 0;
-  const topArt = scored.filter(p => p.art_score >= 55);
-
-  const stats = [
-    { label: 'Total Listings', value: allItems.length.toLocaleString() },
-    { label: 'Regions', value: regions.size },
-    { label: 'Median Price', value: `$${prices[Math.floor(prices.length / 2)]?.toLocaleString() || '—'}` },
-    { label: 'Median Art Score', value: medianArt.toFixed(1), sub: `${scored.length} scored by CLIP` },
-    { label: 'Top Rated', value: topArt.length, sub: 'Art score >= 55' },
-  ];
-
-  const row = document.getElementById('stats-row');
-  row.innerHTML = stats.map(s => `
-    <div class="stat-card">
-      <div class="label">${s.label}</div>
-      <div class="value">${s.value}</div>
-      ${s.sub ? `<div class="sub">${s.sub}</div>` : ''}
-    </div>
-  `).join('');
+  document.getElementById('hero').innerHTML = [
+    { n: allItems.length.toLocaleString(), l:'Listings', s:'Across California' },
+    { n: regions.size, l:'Regions', s:'Craigslist markets' },
+    { n: '$'+med.toLocaleString(), l:'Median Price', s: '$'+Math.min(...pr).toLocaleString()+' — $'+Math.max(...pr).toLocaleString() },
+    { n: medArt.toFixed(1), l:'Median Art Score', s: sc.length+' scored by CLIP' },
+    { n: top.length, l:'Top Rated', s:'Score >= 55' },
+  ].map(s=>`<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
 }
 
 // ─── CHARTS ───
-
 function renderCharts() {
   chartArtScore();
-  chartClipStyle();
   chartQualityUnique();
-  chartScoreRegion();
-  chartRegion();
+  renderClipStyleStrip();
   chartPriceDist();
-  chartMedium();
-  chartMediumPrice();
-  chartStyle();
-  chartRegionPrice();
+  chartScoreRegion();
+  renderRegionStrip();
+  renderMediumStrip();
 }
 
 function chartArtScore() {
-  const scored = allItems.filter(p => p.art_score != null);
-  const buckets = [35, 40, 45, 50, 55, 60, Infinity];
-  const labels = ['35-40', '40-45', '45-50', '50-55', '55-60', '60+'];
-  const counts = new Array(buckets.length - 1).fill(0);
-  scored.forEach(p => {
-    for (let i = 0; i < buckets.length - 1; i++) {
-      if (p.art_score >= (i === 0 ? 0 : buckets[i - 1]) && p.art_score < buckets[i]) { counts[i]++; break; }
-      if (i === buckets.length - 2 && p.art_score >= buckets[i]) { counts[i]++; break; }
-    }
+  const sc = allItems.filter(p=>p.art_score!=null);
+  const bk = [35,40,45,50,55,60,65];
+  const lb = ['<40','40-45','45-50','50-55','55-60','60+'];
+  const c = new Array(6).fill(0);
+  sc.forEach(p => {
+    const s = p.art_score;
+    if(s<40)c[0]++; else if(s<45)c[1]++; else if(s<50)c[2]++; else if(s<55)c[3]++; else if(s<60)c[4]++; else c[5]++;
   });
-
   new Chart(document.getElementById('chart-art-score'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: counts, backgroundColor: '#000', borderRadius: 1 }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
-  });
-}
-
-function chartClipStyle() {
-  const counts = {};
-  allItems.forEach(p => {
-    if (!p.clip_styles || !p.clip_styles.length) return;
-    const topStyle = p.clip_styles[0].style;
-    counts[topStyle] = (counts[topStyle] || 0) + 1;
-  });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-  new Chart(document.getElementById('chart-clip-style'), {
-    type: 'doughnut',
-    data: {
-      labels: sorted.map(([s]) => s),
-      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: CHART_BG }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
-    },
+    type:'bar',
+    data:{ labels:lb, datasets:[{ data:c, backgroundColor:'#e8e8e8', hoverBackgroundColor:'#fff', borderRadius:0, barPercentage:0.85 }] },
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{grid:{display:false},border:{color:'#2a2a2a'}}, y:{grid:{color:'#1a1a1a'},border:{color:'#2a2a2a'}} } },
   });
 }
 
 function chartQualityUnique() {
-  const scored = allItems.filter(p => p.quality_score != null && p.uniqueness != null);
-  const data = scored.map(p => ({ x: p.quality_score, y: p.uniqueness }));
-
+  const d = allItems.filter(p=>p.quality_score!=null&&p.uniqueness!=null).map(p=>({x:p.quality_score,y:p.uniqueness}));
   new Chart(document.getElementById('chart-quality-unique'), {
-    type: 'scatter',
-    data: {
-      datasets: [{ data, backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(0,0,0,0.3)', pointRadius: 3 }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: {
-        x: { title: { display: true, text: 'Quality', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
-        y: { title: { display: true, text: 'Uniqueness', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
+    type:'scatter',
+    data:{ datasets:[{ data:d, backgroundColor:'rgba(255,255,255,0.08)', borderColor:'rgba(255,255,255,0.2)', pointRadius:2.5, pointHoverRadius:5, pointHoverBackgroundColor:'#fff' }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ title:{display:true,text:'QUALITY',font:{size:8,weight:'500'},color:'#444'}, grid:{color:'#1a1a1a'}, border:{color:'#2a2a2a'} },
+        y:{ title:{display:true,text:'UNIQUENESS',font:{size:8,weight:'500'},color:'#444'}, grid:{color:'#1a1a1a'}, border:{color:'#2a2a2a'} },
       },
     },
   });
 }
 
-function chartScoreRegion() {
-  const groups = {};
-  allItems.forEach(p => {
-    if (p.art_score == null) return;
-    if (!groups[p.region]) groups[p.region] = [];
-    groups[p.region].push(p.art_score);
-  });
-
-  const entries = Object.entries(groups)
-    .filter(([, scores]) => scores.length >= 5)
-    .map(([r, scores]) => {
-      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      return [REGION_LABELS[r] || r, avg];
-    })
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  new Chart(document.getElementById('chart-score-region'), {
-    type: 'bar',
-    data: {
-      labels: entries.map(([r]) => r),
-      datasets: [{ data: entries.map(([, s]) => s), backgroundColor: '#333', borderRadius: 1 }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' }, min: 40 } },
-    },
-  });
-}
-
-function chartRegion() {
+function renderClipStyleStrip() {
   const counts = {};
-  allItems.forEach(p => { counts[p.region] = (counts[p.region] || 0) + 1; });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
-
-  new Chart(document.getElementById('chart-region'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(([r]) => REGION_LABELS[r] || r),
-      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: '#000', borderRadius: 1 }],
-    },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
-  });
+  allItems.forEach(p => { if(!p.clip_styles||!p.clip_styles.length)return; counts[p.clip_styles[0].style]=(counts[p.clip_styles[0].style]||0)+1; });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const max = sorted[0]?.[1]||1;
+  const el = document.getElementById('clip-style-strip');
+  el.innerHTML = '<div class="strip-bars">' + sorted.map(([name,count])=>`
+    <div class="strip-bar">
+      <span class="bar-label">${name}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(1)}%"></div></div>
+      <span class="bar-val">${count}</span>
+    </div>
+  `).join('') + '</div>';
 }
 
 function chartPriceDist() {
-  const buckets = [0, 25, 50, 100, 200, 500, 1000, 5000, Infinity];
-  const labels = ['<$25', '$25-50', '$50-100', '$100-200', '$200-500', '$500-1K', '$1K-5K', '$5K+'];
-  const counts = new Array(buckets.length - 1).fill(0);
-  allItems.forEach(p => {
-    if (!p.price) return;
-    for (let i = 0; i < buckets.length - 1; i++) {
-      if (p.price >= buckets[i] && p.price < buckets[i + 1]) { counts[i]++; break; }
-    }
-  });
-
-  new Chart(document.getElementById('chart-price-dist'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: counts, backgroundColor: '#333', borderRadius: 1 }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
+  const bk=[0,25,50,100,200,500,1000,5000,Infinity];
+  const lb=['<$25','$25-50','$50-100','$100-200','$200-500','$500-1K','$1K-5K','$5K+'];
+  const c=new Array(8).fill(0);
+  allItems.forEach(p=>{if(!p.price)return;for(let i=0;i<bk.length-1;i++){if(p.price>=bk[i]&&p.price<bk[i+1]){c[i]++;break;}}});
+  new Chart(document.getElementById('chart-price-dist'),{
+    type:'bar',
+    data:{labels:lb,datasets:[{data:c,backgroundColor:'#e8e8e8',hoverBackgroundColor:'#fff',borderRadius:0,barPercentage:0.85}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},border:{color:'#2a2a2a'}},y:{grid:{color:'#1a1a1a'},border:{color:'#2a2a2a'}}}},
   });
 }
 
-function chartMedium() {
-  const counts = {};
-  allItems.forEach(p => {
-    if (p.tags.mediums.length === 0) { counts['unclassified'] = (counts['unclassified'] || 0) + 1; return; }
-    p.tags.mediums.forEach(m => { counts[m] = (counts[m] || 0) + 1; });
-  });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-  new Chart(document.getElementById('chart-medium'), {
-    type: 'doughnut',
-    data: {
-      labels: sorted.map(([m]) => m),
-      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: CHART_BG }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
-    },
+function chartScoreRegion() {
+  const g={};
+  allItems.forEach(p=>{if(p.art_score==null)return;if(!g[p.region])g[p.region]=[];g[p.region].push(p.art_score);});
+  const entries=Object.entries(g).filter(([,s])=>s.length>=5).map(([r,s])=>[RL[r]||r,s.reduce((a,b)=>a+b,0)/s.length]).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  new Chart(document.getElementById('chart-score-region'),{
+    type:'bar',
+    data:{labels:entries.map(([r])=>r),datasets:[{data:entries.map(([,s])=>s),backgroundColor:'#e8e8e8',hoverBackgroundColor:'#fff',borderRadius:0,barPercentage:0.85}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},border:{color:'#2a2a2a'}},y:{grid:{color:'#1a1a1a'},border:{color:'#2a2a2a'},min:45}}},
   });
 }
 
-function chartMediumPrice() {
-  const groups = {};
-  allItems.forEach(p => {
-    if (!p.price) return;
-    const m = p.tags.mediums[0] || 'unclassified';
-    if (!groups[m]) groups[m] = [];
-    groups[m].push(p.price);
-  });
-
-  const entries = Object.entries(groups)
-    .map(([m, prices]) => [m, prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)]])
-    .filter(([m]) => m !== 'unclassified')
-    .sort((a, b) => b[1] - a[1]);
-
-  new Chart(document.getElementById('chart-medium-price'), {
-    type: 'bar',
-    data: {
-      labels: entries.map(([m]) => m),
-      datasets: [{ data: entries.map(([, p]) => p), backgroundColor: '#555', borderRadius: 1 }],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      scales: { y: { grid: { display: false } }, x: { grid: { color: '#f0f0f0' }, ticks: { callback: v => '$' + v } } },
-    },
-  });
+function renderRegionStrip() {
+  const counts={};
+  allItems.forEach(p=>{counts[p.region]=(counts[p.region]||0)+1;});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const max=sorted[0]?.[1]||1;
+  document.getElementById('region-strip').innerHTML='<div class="strip-bars">'+sorted.map(([r,c])=>`
+    <div class="strip-bar">
+      <span class="bar-label">${RL[r]||r}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(c/max*100).toFixed(1)}%"></div></div>
+      <span class="bar-val">${c}</span>
+    </div>
+  `).join('')+'</div>';
 }
 
-function chartStyle() {
-  const counts = {};
-  allItems.forEach(p => {
-    p.tags.styles.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
-  });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-  new Chart(document.getElementById('chart-style'), {
-    type: 'bar',
-    data: {
-      labels: sorted.map(([s]) => s),
-      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: '#777', borderRadius: 1 }],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      scales: { y: { grid: { display: false } }, x: { grid: { color: '#f0f0f0' } } },
-    },
-  });
+function renderMediumStrip() {
+  const counts={};
+  allItems.forEach(p=>{if(!p.tags.mediums.length)return;p.tags.mediums.forEach(m=>{counts[m]=(counts[m]||0)+1;});});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const max=sorted[0]?.[1]||1;
+  document.getElementById('medium-strip').innerHTML='<div class="strip-bars">'+sorted.map(([m,c])=>`
+    <div class="strip-bar">
+      <span class="bar-label">${m}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(c/max*100).toFixed(1)}%"></div></div>
+      <span class="bar-val">${c}</span>
+    </div>
+  `).join('')+'</div>';
 }
 
-function chartRegionPrice() {
-  const groups = {};
-  allItems.forEach(p => {
-    if (!p.price) return;
-    if (!groups[p.region]) groups[p.region] = [];
-    groups[p.region].push(p.price);
-  });
-
-  const entries = Object.entries(groups)
-    .filter(([, prices]) => prices.length >= 5)
-    .map(([r, prices]) => {
-      const sorted = prices.sort((a, b) => a - b);
-      return [REGION_LABELS[r] || r, sorted[Math.floor(sorted.length / 2)]];
-    })
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  new Chart(document.getElementById('chart-region-price'), {
-    type: 'bar',
-    data: {
-      labels: entries.map(([r]) => r),
-      datasets: [{ data: entries.map(([, p]) => p), backgroundColor: '#000', borderRadius: 1 }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' }, ticks: { callback: v => '$' + v } } },
-    },
-  });
-}
-
-// ─── EXPLORER TABLE ───
-
-function applyExplorerFilter(filter) {
-  currentEFilter = filter;
-  currentPage = 0;
-
-  document.querySelectorAll('#explorer-filters button').forEach(b => {
-    b.classList.toggle('active', b.dataset.ef === filter);
-  });
-
-  switch (filter) {
-    case 'top-rated':
-      explorerItems = allItems.filter(p => p.art_score >= 50).sort((a, b) => (b.art_score || 0) - (a.art_score || 0));
-      break;
-    case 'deals':
-      explorerItems = allItems.filter(p => p.dealScore >= 50).sort((a, b) => b.dealScore - a.dealScore);
-      break;
-    case 'oil':
-      explorerItems = allItems.filter(p => p.tags.mediums.includes('oil'));
-      break;
-    case 'acrylic':
-      explorerItems = allItems.filter(p => p.tags.mediums.includes('acrylic'));
-      break;
-    case 'watercolor':
-      explorerItems = allItems.filter(p => p.tags.mediums.includes('watercolor'));
-      break;
-    case 'landscape':
-      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'landscape');
-      break;
-    case 'portrait':
-      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'portrait');
-      break;
-    case 'abstract-clip':
-      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'abstract');
-      break;
-    case 'signed':
-      explorerItems = allItems.filter(p => p.tags.flags.includes('signed'));
-      break;
-    default:
-      explorerItems = [...allItems];
+// ─── EXPLORER ───
+function applyExplorerFilter(f) {
+  currentPage=0;
+  document.querySelectorAll('#explorer-filters button').forEach(b=>b.classList.toggle('active',b.dataset.ef===f));
+  switch(f){
+    case 'top-rated': explorerItems=allItems.filter(p=>p.art_score>=50).sort((a,b)=>(b.art_score||0)-(a.art_score||0)); break;
+    case 'deals': explorerItems=allItems.filter(p=>p.dealScore>=50).sort((a,b)=>b.dealScore-a.dealScore); break;
+    case 'oil': explorerItems=allItems.filter(p=>p.tags.mediums.includes('oil')); break;
+    case 'acrylic': explorerItems=allItems.filter(p=>p.tags.mediums.includes('acrylic')); break;
+    case 'watercolor': explorerItems=allItems.filter(p=>p.tags.mediums.includes('watercolor')); break;
+    case 'landscape': explorerItems=allItems.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='landscape'); break;
+    case 'portrait': explorerItems=allItems.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='portrait'); break;
+    case 'abstract-clip': explorerItems=allItems.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='abstract'); break;
+    case 'signed': explorerItems=allItems.filter(p=>p.tags.flags.includes('signed')); break;
+    default: explorerItems=[...allItems];
   }
-
-  applySortAndRender();
+  sortAndRender();
 }
 
-document.querySelectorAll('#explorer-filters button').forEach(btn => {
-  btn.addEventListener('click', () => applyExplorerFilter(btn.dataset.ef));
-});
+document.querySelectorAll('#explorer-filters button').forEach(b=>b.addEventListener('click',()=>applyExplorerFilter(b.dataset.ef)));
 
-// Sorting
-document.querySelectorAll('.data-table th[data-sort]').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.sort;
-    if (currentSort.key === key) {
-      currentSort.dir *= -1;
-    } else {
-      currentSort = { key, dir: 1 };
-    }
-    document.querySelectorAll('.data-table th').forEach(h => h.classList.remove('sorted'));
+document.querySelectorAll('.data-table th[data-sort]').forEach(th=>{
+  th.addEventListener('click',()=>{
+    const k=th.dataset.sort;
+    if(currentSort.key===k)currentSort.dir*=-1;else currentSort={key:k,dir:1};
+    document.querySelectorAll('.data-table th').forEach(h=>h.classList.remove('sorted'));
     th.classList.add('sorted');
-    currentPage = 0;
-    applySortAndRender();
+    currentPage=0;
+    sortAndRender();
   });
 });
 
-function applySortAndRender() {
-  const { key, dir } = currentSort;
-  explorerItems.sort((a, b) => {
-    let va, vb;
-    switch (key) {
-      case 'price': va = a.price || 0; vb = b.price || 0; break;
-      case 'art_score': va = a.art_score || 0; vb = b.art_score || 0; break;
-      case 'region': va = a.region; vb = b.region; break;
-      default: va = a.title.toLowerCase(); vb = b.title.toLowerCase();
+function sortAndRender() {
+  const {key,dir}=currentSort;
+  explorerItems.sort((a,b)=>{
+    let va,vb;
+    switch(key){
+      case 'price':va=a.price||0;vb=b.price||0;break;
+      case 'art_score':va=a.art_score||0;vb=b.art_score||0;break;
+      case 'region':va=a.region;vb=b.region;break;
+      default:va=a.title.toLowerCase();vb=b.title.toLowerCase();
     }
-    if (va < vb) return -dir;
-    if (va > vb) return dir;
-    return 0;
+    return va<vb?-dir:va>vb?dir:0;
   });
   renderTable();
 }
 
 function renderTable() {
-  const start = currentPage * PAGE_SIZE;
-  const page = explorerItems.slice(start, start + PAGE_SIZE);
-  const body = document.getElementById('explorer-body');
+  const start=currentPage*PAGE_SIZE;
+  const page=explorerItems.slice(start,start+PAGE_SIZE);
+  const body=document.getElementById('explorer-body');
 
-  body.innerHTML = page.map(item => {
-    const tags = [
-      ...item.tags.mediums.map(t => `<span class="tag medium">${t}</span>`),
-      ...(item.clip_styles || []).slice(0, 1).map(s => `<span class="tag style">${s.style}</span>`),
-      ...item.tags.flags.map(t => `<span class="tag">${t}</span>`),
+  body.innerHTML=page.map(item=>{
+    const tags=[
+      ...item.tags.mediums.map(t=>`<span class="tag medium">${t}</span>`),
+      ...(item.clip_styles||[]).slice(0,1).map(s=>`<span class="tag style">${s.style}</span>`),
+      ...item.tags.flags.map(t=>`<span class="tag">${t}</span>`),
     ].join('');
 
-    const as = item.art_score || 0;
-    const scoreColor = as >= 55 ? '#000' : as >= 50 ? '#555' : as >= 45 ? '#999' : '#ccc';
+    const s=item.art_score||0;
+    const c=s>=55?'#fff':s>=50?'#888':s>=45?'#444':'#2a2a2a';
 
     return `<tr>
       <td><img class="thumb" src="${item.images[0]}" loading="lazy"></td>
       <td class="title-cell"><a href="${item.url}" target="_blank" rel="noopener">${item.title}</a></td>
-      <td>${item.price ? '$' + item.price.toLocaleString() : '—'}</td>
-      <td>${REGION_LABELS[item.region] || item.region}</td>
-      <td>${tags || '—'}</td>
-      <td style="color:${scoreColor}; font-weight:500">${as ? as.toFixed(1) : '—'}</td>
+      <td>${item.price?'$'+item.price.toLocaleString():'—'}</td>
+      <td>${RL[item.region]||item.region}</td>
+      <td>${tags||'—'}</td>
+      <td class="score-pill" style="color:${c}">${s?s.toFixed(1):'—'}</td>
     </tr>`;
   }).join('');
 
@@ -867,18 +726,15 @@ function renderTable() {
 }
 
 function renderPagination() {
-  const totalPages = Math.ceil(explorerItems.length / PAGE_SIZE);
-  const pag = document.getElementById('pagination');
-
-  if (totalPages <= 1) { pag.innerHTML = ''; return; }
-
-  pag.innerHTML = `
-    <button ${currentPage === 0 ? 'disabled' : ''} onclick="currentPage--; renderTable()">Prev</button>
-    <span style="font-size:11px; padding:6px; color:#999">${currentPage + 1} / ${totalPages}</span>
-    <button ${currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="currentPage++; renderTable()">Next</button>
+  const total=Math.ceil(explorerItems.length/PAGE_SIZE);
+  const p=document.getElementById('pagination');
+  if(total<=1){p.innerHTML='';return;}
+  p.innerHTML=`
+    <button ${currentPage===0?'disabled':''} onclick="currentPage--;renderTable()">Prev</button>
+    <span class="page-info">${currentPage+1} / ${total} &mdash; ${explorerItems.length} items</span>
+    <button ${currentPage>=total-1?'disabled':''} onclick="currentPage++;renderTable()">Next</button>
   `;
 }
 </script>
-
 </body>
 </html>
