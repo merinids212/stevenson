@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEVENSON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --nav-height: 64px;
+    --font: 'IBM Plex Mono', monospace;
+    --black: #000;
+    --white: #fff;
+    --gray: #999;
+    --light-gray: #ccc;
+    --transition-speed: 0.45s;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font);
+    background: var(--white);
+    color: var(--black);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* ─── NAV ─── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--nav-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--white);
+    z-index: 100;
+    transition: opacity var(--transition-speed) var(--ease);
+  }
+
+  nav.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .nav-filters {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .nav-filters button {
+    font-family: var(--font);
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray);
+    padding: 4px 2px;
+    transition: color 0.2s;
+    text-transform: uppercase;
+  }
+
+  .nav-filters button.active {
+    color: var(--black);
+  }
+
+  .nav-filters button:hover {
+    color: var(--black);
+  }
+
+  .nav-logo {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+  }
+
+  .nav-count {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--gray);
+  }
+
+  /* ─── SPACER ─── */
+  .nav-spacer {
+    height: var(--nav-height);
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  /* ─── APP CONTAINER ─── */
+  #app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── GRID VIEW ─── */
+  #grid-view {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: var(--nav-height);
+    transition: opacity var(--transition-speed) var(--ease),
+                transform var(--transition-speed) var(--ease);
+  }
+
+  #grid-view.zooming-out {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0;
+    padding: 0;
+  }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 400px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ─── GRID ITEM ─── */
+  .grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px 10px;
+    cursor: pointer;
+    transition: transform 0.25s var(--ease), opacity 0.25s var(--ease);
+    position: relative;
+  }
+
+  .grid-item:hover {
+    transform: scale(1.03);
+  }
+
+  .grid-item:active {
+    transform: scale(0.97);
+  }
+
+  .grid-item-img-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #fafafa;
+  }
+
+  .grid-item-img-wrap img {
+    max-width: 92%;
+    max-height: 92%;
+    object-fit: contain;
+    transition: transform 0.3s var(--ease);
+  }
+
+  .grid-item:hover .grid-item-img-wrap img {
+    transform: scale(1.05);
+  }
+
+  .grid-item-title {
+    margin-top: 6px;
+    font-size: 10px;
+    text-align: center;
+    color: var(--black);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.4;
+    max-width: 100%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    padding: 0 2px;
+  }
+
+  /* ─── DETAIL VIEW ─── */
+  #detail-view {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--white);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transform: scale(1.08);
+    pointer-events: none;
+    transition: opacity var(--transition-speed) var(--ease),
+                transform var(--transition-speed) var(--ease);
+  }
+
+  #detail-view.active {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: all;
+  }
+
+  #detail-view.closing {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+
+  /* ─── DETAIL NAV ─── */
+  .detail-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--nav-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 110;
+    background: var(--white);
+  }
+
+  .detail-nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    color: var(--black);
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s;
+  }
+
+  .detail-nav button:hover {
+    opacity: 0.5;
+  }
+
+  /* ─── DETAIL CONTENT ─── */
+  .detail-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding-top: var(--nav-height);
+  }
+
+  .detail-image-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-height: 50vh;
+    padding: 20px 60px;
+  }
+
+  .detail-image-area img {
+    max-width: 100%;
+    max-height: 65vh;
+    object-fit: contain;
+    transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+  }
+
+  .detail-image-area img.switching {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  /* ─── CAROUSEL ARROWS ─── */
+  .arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--black);
+    cursor: pointer;
+    padding: 16px;
+    transition: opacity 0.2s;
+    z-index: 5;
+    user-select: none;
+  }
+
+  .arrow:hover { opacity: 0.4; }
+  .arrow-left { left: 16px; }
+  .arrow-right { right: 16px; }
+
+  /* ─── DOT INDICATORS ─── */
+  .dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--light-gray);
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+
+  .dot.active {
+    background: var(--black);
+  }
+
+  /* ─── DETAIL INFO ─── */
+  .detail-info {
+    text-align: center;
+    padding: 16px 20px 40px;
+  }
+
+  .detail-title {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .detail-price {
+    font-size: 14px;
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+
+  .detail-location {
+    font-size: 12px;
+    color: var(--gray);
+    margin-bottom: 16px;
+  }
+
+  .detail-link {
+    display: inline-block;
+    font-family: var(--font);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--black);
+    border: 1px solid var(--black);
+    padding: 10px 28px;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .detail-link:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  /* ─── EXPAND BUTTON (like Yeezy +) ─── */
+  .expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    color: var(--gray);
+    transition: color 0.2s, transform 0.3s var(--ease);
+  }
+
+  .expand-btn:hover {
+    color: var(--black);
+  }
+
+  .expand-btn.open {
+    transform: rotate(45deg);
+  }
+
+  .detail-extra {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s var(--ease), opacity 0.3s;
+    opacity: 0;
+  }
+
+  .detail-extra.open {
+    max-height: 200px;
+    opacity: 1;
+  }
+
+  /* ─── GRID / DETAIL NEIGHBOR NAV ─── */
+  .neighbor-nav {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    z-index: 95;
+    opacity: 0;
+    transition: opacity 0.3s var(--ease);
+    pointer-events: none;
+  }
+
+  .neighbor-nav.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .neighbor-nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray);
+    transition: color 0.2s;
+  }
+
+  .neighbor-nav button:hover {
+    color: var(--black);
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    padding: 24px 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .footer a {
+    font-size: 11px;
+    color: var(--gray);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    transition: color 0.2s;
+  }
+
+  .footer a:hover {
+    color: var(--black);
+  }
+
+  /* ─── LOADING ─── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-size: 14px;
+    color: var(--gray);
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── STAGGERED ENTRANCE ─── */
+  .grid-item {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: fadeUp 0.4s var(--ease) forwards;
+  }
+
+  @keyframes fadeUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- NAV -->
+  <nav id="main-nav">
+    <span class="nav-logo" onclick="goHome()">STEVENSON</span>
+    <div class="nav-filters">
+      <button class="active" data-filter="all">ALL</button>
+      <button data-filter="under50">UNDER $50</button>
+      <button data-filter="50to200">$50 - $200</button>
+      <button data-filter="200to1000">$200 - $1K</button>
+      <button data-filter="over1000">$1K+</button>
+    </div>
+    <span class="nav-count" id="nav-count"></span>
+  </nav>
+
+  <!-- GRID -->
+  <div id="grid-view">
+    <div class="grid" id="grid"></div>
+    <div class="footer">
+      <a href="#">About</a>
+      <a href="#">Contact</a>
+      <a href="#">Terms</a>
+      <a href="#">Privacy</a>
+    </div>
+  </div>
+
+  <!-- DETAIL -->
+  <div id="detail-view">
+    <div class="detail-nav">
+      <button onclick="closeDetail()" aria-label="Back">&#8249;</button>
+      <button style="font-size:14px; visibility:hidden;">&#128722;</button>
+    </div>
+    <div class="detail-content">
+      <div class="detail-image-area">
+        <button class="arrow arrow-left" onclick="prevImage()">&#8249;</button>
+        <img id="detail-img" src="" alt="">
+        <button class="arrow arrow-right" onclick="nextImage()">&#8250;</button>
+      </div>
+      <div class="dots" id="dots"></div>
+      <div class="detail-info">
+        <div class="detail-title" id="detail-title"></div>
+        <div class="detail-price" id="detail-price"></div>
+        <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+</button>
+        <div class="detail-extra" id="detail-extra">
+          <div class="detail-location" id="detail-location"></div>
+          <a class="detail-link" id="detail-link" href="#" target="_blank" rel="noopener">VIEW LISTING</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEIGHBOR NAV (prev/next painting in detail) -->
+  <div class="neighbor-nav" id="neighbor-nav">
+    <button onclick="prevPainting()">&#8249; PREV</button>
+    <button onclick="nextPainting()">NEXT &#8250;</button>
+  </div>
+</div>
+
+<script>
+  let paintings = [];
+  let filtered = [];
+  let currentIndex = -1;
+  let currentImageIndex = 0;
+  let currentFilter = 'all';
+
+  // Load paintings
+  fetch('paintings.json')
+    .then(r => r.json())
+    .then(data => {
+      // Filter to only paintings with images
+      paintings = data.filter(p => p.images && p.images.length > 0);
+      filtered = [...paintings];
+      renderGrid();
+    });
+
+  // Generate short code from title
+  function makeCode(title) {
+    const words = title.replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0].substring(0, 2) + '-' + String(words.length).padStart(2, '0')).toUpperCase();
+    }
+    return title.substring(0, 5).toUpperCase();
+  }
+
+  // Shorten title for grid
+  function shortTitle(title) {
+    const clean = title.replace(/[^\w\s]/g, '').trim();
+    if (clean.length > 24) return clean.substring(0, 22) + '...';
+    return clean;
+  }
+
+  // Filter logic
+  function applyFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.nav-filters button').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+
+    switch (filter) {
+      case 'under50':
+        filtered = paintings.filter(p => p.price !== null && p.price < 50);
+        break;
+      case '50to200':
+        filtered = paintings.filter(p => p.price !== null && p.price >= 50 && p.price <= 200);
+        break;
+      case '200to1000':
+        filtered = paintings.filter(p => p.price !== null && p.price > 200 && p.price <= 1000);
+        break;
+      case 'over1000':
+        filtered = paintings.filter(p => p.price !== null && p.price > 1000);
+        break;
+      default:
+        filtered = [...paintings];
+    }
+
+    renderGrid();
+  }
+
+  // Nav filter click handlers
+  document.querySelectorAll('.nav-filters button').forEach(btn => {
+    btn.addEventListener('click', () => applyFilter(btn.dataset.filter));
+  });
+
+  // Render grid
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    document.getElementById('nav-count').textContent = filtered.length;
+
+    filtered.forEach((painting, i) => {
+      const item = document.createElement('div');
+      item.className = 'grid-item';
+      item.style.animationDelay = `${Math.min(i * 0.03, 1.2)}s`;
+      item.onclick = () => openDetail(i);
+
+      item.innerHTML = `
+        <div class="grid-item-img-wrap">
+          <img src="${painting.images[0]}" alt="${painting.title}" loading="lazy">
+        </div>
+        <div class="grid-item-title">${shortTitle(painting.title)}</div>
+      `;
+      grid.appendChild(item);
+    });
+  }
+
+  // Open detail view with zoom animation
+  function openDetail(index) {
+    currentIndex = index;
+    currentImageIndex = 0;
+    const painting = filtered[index];
+
+    // Populate detail
+    document.getElementById('detail-title').textContent = painting.title;
+    document.getElementById('detail-price').textContent = painting.price
+      ? `$${painting.price.toLocaleString()}`
+      : 'INQUIRE';
+    document.getElementById('detail-location').textContent = painting.location || '';
+    document.getElementById('detail-link').href = painting.url || '#';
+
+    // Reset expand
+    document.getElementById('expand-btn').classList.remove('open');
+    document.getElementById('detail-extra').classList.remove('open');
+
+    // Set image
+    const img = document.getElementById('detail-img');
+    img.src = painting.images[0];
+    img.alt = painting.title;
+
+    // Render dots
+    renderDots(painting.images);
+
+    // Animate in
+    const detail = document.getElementById('detail-view');
+    detail.classList.remove('closing');
+    detail.classList.add('active');
+    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('neighbor-nav').classList.add('active');
+
+    // Hide arrows if single image
+    document.querySelector('.arrow-left').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
+    document.querySelector('.arrow-right').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
+  }
+
+  // Close detail with zoom-out animation
+  function closeDetail() {
+    const detail = document.getElementById('detail-view');
+    detail.classList.add('closing');
+    document.getElementById('main-nav').classList.remove('hidden');
+    document.getElementById('neighbor-nav').classList.remove('active');
+
+    setTimeout(() => {
+      detail.classList.remove('active');
+      detail.classList.remove('closing');
+    }, 450);
+  }
+
+  // Image carousel
+  function renderDots(images) {
+    const dots = document.getElementById('dots');
+    dots.innerHTML = '';
+    if (images.length <= 1) return;
+
+    images.forEach((_, i) => {
+      const dot = document.createElement('div');
+      dot.className = `dot${i === currentImageIndex ? ' active' : ''}`;
+      dot.onclick = () => goToImage(i);
+      dots.appendChild(dot);
+    });
+  }
+
+  function goToImage(index) {
+    const painting = filtered[currentIndex];
+    if (!painting) return;
+
+    currentImageIndex = index;
+    const img = document.getElementById('detail-img');
+
+    // Animate switch
+    img.classList.add('switching');
+    setTimeout(() => {
+      img.src = painting.images[index];
+      img.classList.remove('switching');
+    }, 200);
+
+    // Update dots
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === index);
+    });
+  }
+
+  function nextImage() {
+    const painting = filtered[currentIndex];
+    if (!painting) return;
+    const next = (currentImageIndex + 1) % painting.images.length;
+    goToImage(next);
+  }
+
+  function prevImage() {
+    const painting = filtered[currentIndex];
+    if (!painting) return;
+    const prev = (currentImageIndex - 1 + painting.images.length) % painting.images.length;
+    goToImage(prev);
+  }
+
+  // Navigate between paintings in detail view
+  function nextPainting() {
+    if (currentIndex < filtered.length - 1) {
+      openDetail(currentIndex + 1);
+    }
+  }
+
+  function prevPainting() {
+    if (currentIndex > 0) {
+      openDetail(currentIndex - 1);
+    }
+  }
+
+  // Expand extra info
+  function toggleExtra() {
+    document.getElementById('expand-btn').classList.toggle('open');
+    document.getElementById('detail-extra').classList.toggle('open');
+  }
+
+  // Go home
+  function goHome() {
+    closeDetail();
+    applyFilter('all');
+    document.getElementById('grid-view').scrollTop = 0;
+  }
+
+  // Keyboard nav
+  document.addEventListener('keydown', (e) => {
+    const detail = document.getElementById('detail-view');
+    if (detail.classList.contains('active')) {
+      if (e.key === 'Escape') closeDetail();
+      if (e.key === 'ArrowLeft') prevImage();
+      if (e.key === 'ArrowRight') nextImage();
+      if (e.key === 'ArrowUp') prevPainting();
+      if (e.key === 'ArrowDown') nextPainting();
+    }
+  });
+</script>
+
+</body>
+</html>
