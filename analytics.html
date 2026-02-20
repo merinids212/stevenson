@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEVENSON — Analytics</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font: 'IBM Plex Mono', monospace;
+    --black: #000;
+    --white: #fff;
+    --gray: #999;
+    --light: #f5f5f5;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html, body {
+    font-family: var(--font);
+    background: var(--white);
+    color: var(--black);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar { width: 0; }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; width: 100%;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--white);
+    z-index: 100;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .nav-back {
+    position: absolute; left: 20px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    font-size: 22px; color: var(--black);
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .nav-back:hover { opacity: 0.5; }
+
+  .nav-title {
+    font-size: 14px; font-weight: 500;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  /* LAYOUT */
+  .page { padding: 84px 24px 60px; max-width: 1200px; margin: 0 auto; }
+
+  .section {
+    margin-bottom: 56px;
+  }
+
+  .section-title {
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 20px; color: var(--gray);
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .stat-card {
+    background: var(--light);
+    padding: 20px;
+    border-radius: 2px;
+  }
+
+  .stat-card .label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray);
+    margin-bottom: 8px;
+  }
+
+  .stat-card .value {
+    font-size: 22px; font-weight: 500;
+  }
+
+  .stat-card .sub {
+    font-size: 11px; color: var(--gray); margin-top: 4px;
+  }
+
+  /* CHARTS */
+  .chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: var(--light);
+    padding: 24px;
+    border-radius: 2px;
+  }
+
+  .chart-card h3 {
+    font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 16px;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 280px;
+  }
+
+  /* FILTER BAR */
+  .filter-bar {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .filter-bar button {
+    font-family: var(--font);
+    font-size: 11px; letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: var(--light); border: none;
+    padding: 6px 14px; cursor: pointer;
+    color: var(--gray);
+    transition: all 0.2s;
+  }
+
+  .filter-bar button.active {
+    background: var(--black); color: var(--white);
+  }
+
+  .filter-bar button:hover {
+    color: var(--black);
+  }
+
+  .filter-bar button.active:hover {
+    color: var(--white);
+  }
+
+  /* TABLE */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .data-table th {
+    text-align: left;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--black);
+    color: var(--gray);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+  }
+
+  .data-table th:hover { color: var(--black); }
+  .data-table th.sorted { color: var(--black); }
+
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+  }
+
+  .data-table tr:hover td {
+    background: #fafafa;
+  }
+
+  .data-table .thumb {
+    width: 40px; height: 40px;
+    object-fit: cover; border-radius: 2px;
+  }
+
+  .data-table .title-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .data-table a {
+    color: var(--black);
+    text-decoration: none;
+    border-bottom: 1px solid #ddd;
+    transition: border-color 0.2s;
+  }
+
+  .data-table a:hover { border-color: var(--black); }
+
+  .tag {
+    display: inline-block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    background: #eee;
+    border-radius: 1px;
+    margin-right: 4px;
+    margin-bottom: 2px;
+  }
+
+  .tag.medium { background: #e8f0e8; }
+  .tag.style { background: #eee8f0; }
+  .tag.deal { background: #ffe8e0; }
+
+  .pagination {
+    display: flex; gap: 8px; justify-content: center;
+    margin-top: 16px;
+  }
+
+  .pagination button {
+    font-family: var(--font);
+    font-size: 11px;
+    background: none; border: 1px solid #ddd;
+    padding: 6px 14px; cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .pagination button:hover { border-color: var(--black); }
+  .pagination button:disabled { opacity: 0.3; cursor: default; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-back" href="index.html">&#8249;</a>
+  <span class="nav-title">Analytics</span>
+</nav>
+
+<div class="page">
+
+  <!-- TOP STATS -->
+  <div class="stats-row" id="stats-row"></div>
+
+  <!-- CHARTS -->
+  <div class="section">
+    <div class="section-title">Distribution</div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>Listings by Region</h3>
+        <div class="chart-wrap"><canvas id="chart-region"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Price Distribution</h3>
+        <div class="chart-wrap"><canvas id="chart-price-dist"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>Medium Breakdown</h3>
+        <div class="chart-wrap"><canvas id="chart-medium"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Avg Price by Medium</h3>
+        <div class="chart-wrap"><canvas id="chart-medium-price"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>Style Tags</h3>
+        <div class="chart-wrap"><canvas id="chart-style"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Avg Price by Region (Top 10)</h3>
+        <div class="chart-wrap"><canvas id="chart-region-price"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEALS TABLE -->
+  <div class="section">
+    <div class="section-title">Explorer</div>
+    <div class="filter-bar" id="explorer-filters">
+      <button class="active" data-ef="all">All</button>
+      <button data-ef="deals">Deals</button>
+      <button data-ef="oil">Oil</button>
+      <button data-ef="acrylic">Acrylic</button>
+      <button data-ef="watercolor">Watercolor</button>
+      <button data-ef="abstract">Abstract</button>
+      <button data-ef="vintage">Vintage</button>
+      <button data-ef="signed">Signed</button>
+      <button data-ef="large">Large</button>
+    </div>
+    <table class="data-table" id="explorer-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="sorted" data-sort="title">Title</th>
+          <th data-sort="price">Price</th>
+          <th data-sort="region">Region</th>
+          <th data-sort="medium">Tags</th>
+          <th data-sort="score">Score</th>
+        </tr>
+      </thead>
+      <tbody id="explorer-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div>
+
+<script>
+const REGION_LABELS = {
+  losangeles: 'LA', sfbay: 'SF Bay', sandiego: 'San Diego',
+  sacramento: 'Sacramento', fresno: 'Fresno', bakersfield: 'Bakersfield',
+  orangecounty: 'OC', inlandempire: 'Inland Empire', ventura: 'Ventura',
+  santabarbara: 'Santa Barbara', stockton: 'Stockton', modesto: 'Modesto',
+  visalia: 'Visalia', merced: 'Merced', monterey: 'Monterey',
+  chico: 'Chico', redding: 'Redding', humboldt: 'Humboldt',
+  mendocino: 'Mendocino', goldcountry: 'Gold Country', susanville: 'Susanville',
+  yubasutter: 'Yuba-Sutter', palmsprings: 'Palm Springs', imperial: 'Imperial',
+  slo: 'SLO', hanford: 'Hanford', siskiyou: 'Siskiyou',
+};
+
+// ─── CLASSIFICATION ENGINE ───
+
+const MEDIUMS = {
+  oil: /\boil\b/i,
+  acrylic: /\bacrylic\b/i,
+  watercolor: /\bwater\s?colou?r\b/i,
+  pastel: /\bpastel\b/i,
+  gouache: /\bgouache\b/i,
+  spray: /\bspray\b/i,
+  ink: /\bink\b/i,
+  mixed: /\bmixed\s?media\b/i,
+  print: /\bprint\b|\blithograph\b|\bserigraph\b|\bgiclee\b/i,
+};
+
+const STYLES = {
+  abstract: /\babstract\b/i,
+  impressionist: /\bimpressionis/i,
+  modern: /\bmodern\b/i,
+  vintage: /\bvintage\b|\bantique\b/i,
+  contemporary: /\bcontemporary\b/i,
+  surreal: /\bsurreal/i,
+  folk: /\bfolk\b|\bnaive\b|\bprimitive\b/i,
+  pop: /\bpop\s?art\b/i,
+  realism: /\brealis/i,
+};
+
+const SUBJECTS = {
+  landscape: /\blandscape\b|\bseascape\b|\bmountain\b|\bocean\b|\bbeach\b|\bsunset\b/i,
+  portrait: /\bportrait\b|\bface\b|\bwoman\b|\bman\b|\bnude\b/i,
+  still_life: /\bstill\s?life\b|\bflower\b|\bfloral\b|\bvase\b|\bfruit\b/i,
+  cityscape: /\bcity\b|\burban\b|\bstreet\b|\bbuilding\b/i,
+  animal: /\banimal\b|\bhorse\b|\bdog\b|\bcat\b|\bbird\b/i,
+};
+
+const FLAGS = {
+  signed: /\bsigned\b|\bsignature\b/i,
+  framed: /\bframed\b|\bframe\b/i,
+  large: /\blarge\b|\bhuge\b|\boversized\b|\b\d{2,3}\s*x\s*\d{2,3}\b|\b[3-9]\s*ft\b|\b[3-9]\s*foot\b/i,
+  original: /\boriginal\b/i,
+};
+
+function classify(title) {
+  const t = title;
+  const tags = { mediums: [], styles: [], subjects: [], flags: [] };
+
+  for (const [k, rx] of Object.entries(MEDIUMS)) {
+    if (rx.test(t)) tags.mediums.push(k);
+  }
+  for (const [k, rx] of Object.entries(STYLES)) {
+    if (rx.test(t)) tags.styles.push(k);
+  }
+  for (const [k, rx] of Object.entries(SUBJECTS)) {
+    if (rx.test(t)) tags.subjects.push(k);
+  }
+  for (const [k, rx] of Object.entries(FLAGS)) {
+    if (rx.test(t)) tags.flags.push(k);
+  }
+
+  return tags;
+}
+
+// "Deal score" — lower price relative to similar items = better deal
+function computeDealScores(items) {
+  // Group by primary medium, compute median price per group
+  const groups = {};
+  for (const item of items) {
+    const key = item.tags.mediums[0] || 'unknown';
+    if (!groups[key]) groups[key] = [];
+    if (item.price) groups[key].push(item.price);
+  }
+  const medians = {};
+  for (const [k, prices] of Object.entries(groups)) {
+    const sorted = prices.sort((a, b) => a - b);
+    medians[k] = sorted[Math.floor(sorted.length / 2)] || 100;
+  }
+
+  for (const item of items) {
+    if (!item.price) { item.dealScore = 0; continue; }
+    const key = item.tags.mediums[0] || 'unknown';
+    const median = medians[key];
+    // Score: how much below median (capped at 100)
+    const ratio = (median - item.price) / median;
+    // Bonus for signed, original, framed
+    let bonus = 0;
+    if (item.tags.flags.includes('signed')) bonus += 0.15;
+    if (item.tags.flags.includes('original')) bonus += 0.15;
+    if (item.tags.flags.includes('framed')) bonus += 0.1;
+    item.dealScore = Math.round(Math.min(100, Math.max(0, (ratio + bonus) * 100)));
+  }
+}
+
+// ─── CHART DEFAULTS ───
+
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 10;
+Chart.defaults.color = '#999';
+Chart.defaults.plugins.legend.display = false;
+
+const CHART_BG = [
+  '#000', '#333', '#555', '#777', '#999', '#aaa', '#bbb', '#ccc', '#ddd', '#eee',
+  '#2a2a2a', '#444', '#666', '#888',
+];
+
+// ─── MAIN ───
+
+let allItems = [];
+let explorerItems = [];
+let currentPage = 0;
+let currentSort = { key: 'title', dir: 1 };
+let currentEFilter = 'all';
+const PAGE_SIZE = 25;
+
+fetch('paintings.json')
+  .then(r => r.json())
+  .then(data => {
+    allItems = data
+      .filter(p => p.images && p.images.length > 0)
+      .map(p => ({ ...p, tags: classify(p.title) }));
+
+    computeDealScores(allItems);
+    renderStats();
+    renderCharts();
+    applyExplorerFilter('all');
+  });
+
+// ─── STATS ───
+
+function renderStats() {
+  const priced = allItems.filter(p => p.price);
+  const prices = priced.map(p => p.price).sort((a, b) => a - b);
+  const regions = new Set(allItems.map(p => p.region));
+  const withMedium = allItems.filter(p => p.tags.mediums.length > 0);
+  const deals = allItems.filter(p => p.dealScore >= 60);
+
+  const stats = [
+    { label: 'Total Listings', value: allItems.length.toLocaleString() },
+    { label: 'Regions', value: regions.size },
+    { label: 'Median Price', value: `$${prices[Math.floor(prices.length / 2)]?.toLocaleString() || '—'}` },
+    { label: 'Classified Medium', value: `${Math.round(withMedium.length / allItems.length * 100)}%`, sub: `${withMedium.length} of ${allItems.length}` },
+    { label: 'Deals Found', value: deals.length, sub: 'Score >= 60' },
+  ];
+
+  const row = document.getElementById('stats-row');
+  row.innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="label">${s.label}</div>
+      <div class="value">${s.value}</div>
+      ${s.sub ? `<div class="sub">${s.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ─── CHARTS ───
+
+function renderCharts() {
+  chartRegion();
+  chartPriceDist();
+  chartMedium();
+  chartMediumPrice();
+  chartStyle();
+  chartRegionPrice();
+}
+
+function chartRegion() {
+  const counts = {};
+  allItems.forEach(p => { counts[p.region] = (counts[p.region] || 0) + 1; });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+  new Chart(document.getElementById('chart-region'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([r]) => REGION_LABELS[r] || r),
+      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: '#000', borderRadius: 1 }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
+  });
+}
+
+function chartPriceDist() {
+  const buckets = [0, 25, 50, 100, 200, 500, 1000, 5000, Infinity];
+  const labels = ['<$25', '$25-50', '$50-100', '$100-200', '$200-500', '$500-1K', '$1K-5K', '$5K+'];
+  const counts = new Array(buckets.length - 1).fill(0);
+  allItems.forEach(p => {
+    if (!p.price) return;
+    for (let i = 0; i < buckets.length - 1; i++) {
+      if (p.price >= buckets[i] && p.price < buckets[i + 1]) { counts[i]++; break; }
+    }
+  });
+
+  new Chart(document.getElementById('chart-price-dist'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: counts, backgroundColor: '#333', borderRadius: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
+  });
+}
+
+function chartMedium() {
+  const counts = {};
+  allItems.forEach(p => {
+    if (p.tags.mediums.length === 0) { counts['unclassified'] = (counts['unclassified'] || 0) + 1; return; }
+    p.tags.mediums.forEach(m => { counts[m] = (counts[m] || 0) + 1; });
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('chart-medium'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(([m]) => m),
+      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: CHART_BG }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
+    },
+  });
+}
+
+function chartMediumPrice() {
+  const groups = {};
+  allItems.forEach(p => {
+    if (!p.price) return;
+    const m = p.tags.mediums[0] || 'unclassified';
+    if (!groups[m]) groups[m] = [];
+    groups[m].push(p.price);
+  });
+
+  const entries = Object.entries(groups)
+    .map(([m, prices]) => [m, prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)]])
+    .filter(([m]) => m !== 'unclassified')
+    .sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('chart-medium-price'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(([m]) => m),
+      datasets: [{ data: entries.map(([, p]) => p), backgroundColor: '#555', borderRadius: 1 }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { grid: { display: false } }, x: { grid: { color: '#f0f0f0' }, ticks: { callback: v => '$' + v } } },
+    },
+  });
+}
+
+function chartStyle() {
+  const counts = {};
+  allItems.forEach(p => {
+    p.tags.styles.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('chart-style'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([s]) => s),
+      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: '#777', borderRadius: 1 }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { grid: { display: false } }, x: { grid: { color: '#f0f0f0' } } },
+    },
+  });
+}
+
+function chartRegionPrice() {
+  const groups = {};
+  allItems.forEach(p => {
+    if (!p.price) return;
+    if (!groups[p.region]) groups[p.region] = [];
+    groups[p.region].push(p.price);
+  });
+
+  const entries = Object.entries(groups)
+    .filter(([, prices]) => prices.length >= 5)
+    .map(([r, prices]) => {
+      const sorted = prices.sort((a, b) => a - b);
+      return [REGION_LABELS[r] || r, sorted[Math.floor(sorted.length / 2)]];
+    })
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  new Chart(document.getElementById('chart-region-price'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(([r]) => r),
+      datasets: [{ data: entries.map(([, p]) => p), backgroundColor: '#000', borderRadius: 1 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' }, ticks: { callback: v => '$' + v } } },
+    },
+  });
+}
+
+// ─── EXPLORER TABLE ───
+
+function applyExplorerFilter(filter) {
+  currentEFilter = filter;
+  currentPage = 0;
+
+  document.querySelectorAll('#explorer-filters button').forEach(b => {
+    b.classList.toggle('active', b.dataset.ef === filter);
+  });
+
+  switch (filter) {
+    case 'deals':
+      explorerItems = allItems.filter(p => p.dealScore >= 50).sort((a, b) => b.dealScore - a.dealScore);
+      break;
+    case 'oil':
+      explorerItems = allItems.filter(p => p.tags.mediums.includes('oil'));
+      break;
+    case 'acrylic':
+      explorerItems = allItems.filter(p => p.tags.mediums.includes('acrylic'));
+      break;
+    case 'watercolor':
+      explorerItems = allItems.filter(p => p.tags.mediums.includes('watercolor'));
+      break;
+    case 'abstract':
+      explorerItems = allItems.filter(p => p.tags.styles.includes('abstract'));
+      break;
+    case 'vintage':
+      explorerItems = allItems.filter(p => p.tags.styles.includes('vintage'));
+      break;
+    case 'signed':
+      explorerItems = allItems.filter(p => p.tags.flags.includes('signed'));
+      break;
+    case 'large':
+      explorerItems = allItems.filter(p => p.tags.flags.includes('large'));
+      break;
+    default:
+      explorerItems = [...allItems];
+  }
+
+  applySortAndRender();
+}
+
+document.querySelectorAll('#explorer-filters button').forEach(btn => {
+  btn.addEventListener('click', () => applyExplorerFilter(btn.dataset.ef));
+});
+
+// Sorting
+document.querySelectorAll('.data-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (currentSort.key === key) {
+      currentSort.dir *= -1;
+    } else {
+      currentSort = { key, dir: 1 };
+    }
+    document.querySelectorAll('.data-table th').forEach(h => h.classList.remove('sorted'));
+    th.classList.add('sorted');
+    currentPage = 0;
+    applySortAndRender();
+  });
+});
+
+function applySortAndRender() {
+  const { key, dir } = currentSort;
+  explorerItems.sort((a, b) => {
+    let va, vb;
+    switch (key) {
+      case 'price': va = a.price || 0; vb = b.price || 0; break;
+      case 'score': va = a.dealScore || 0; vb = b.dealScore || 0; break;
+      case 'region': va = a.region; vb = b.region; break;
+      default: va = a.title.toLowerCase(); vb = b.title.toLowerCase();
+    }
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
+  renderTable();
+}
+
+function renderTable() {
+  const start = currentPage * PAGE_SIZE;
+  const page = explorerItems.slice(start, start + PAGE_SIZE);
+  const body = document.getElementById('explorer-body');
+
+  body.innerHTML = page.map(item => {
+    const tags = [
+      ...item.tags.mediums.map(t => `<span class="tag medium">${t}</span>`),
+      ...item.tags.styles.map(t => `<span class="tag style">${t}</span>`),
+      ...item.tags.flags.map(t => `<span class="tag">${t}</span>`),
+    ].join('');
+
+    const scoreColor = item.dealScore >= 60 ? '#c44' : item.dealScore >= 30 ? '#999' : '#ddd';
+
+    return `<tr>
+      <td><img class="thumb" src="${item.images[0]}" loading="lazy"></td>
+      <td class="title-cell"><a href="${item.url}" target="_blank" rel="noopener">${item.title}</a></td>
+      <td>${item.price ? '$' + item.price.toLocaleString() : '—'}</td>
+      <td>${REGION_LABELS[item.region] || item.region}</td>
+      <td>${tags || '—'}</td>
+      <td style="color:${scoreColor}; font-weight:500">${item.dealScore}</td>
+    </tr>`;
+  }).join('');
+
+  renderPagination();
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(explorerItems.length / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  pag.innerHTML = `
+    <button ${currentPage === 0 ? 'disabled' : ''} onclick="currentPage--; renderTable()">Prev</button>
+    <span style="font-size:11px; padding:6px; color:#999">${currentPage + 1} / ${totalPages}</span>
+    <button ${currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="currentPage++; renderTable()">Next</button>
+  `;
+}
+</script>
+
+</body>
+</html>
