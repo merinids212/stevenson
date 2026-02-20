@@ -156,6 +156,33 @@ def extract_listings(html: str) -> list[Listing]:
     return results
 
 
+JUNK_KEYWORDS = [
+    "book", "novel", "compressor", "scaffold", "mercedes", "benz", "scion",
+    "ppe", "clean suit", "scissor lift", "golf course", "manufacturing",
+    "equipment", "deck mat", "deck material", "coffee table", "cnc mill",
+    "lathe", "grinder", "dryer", "forklift", "trailer", "truck", "car ",
+    "sedan", "coupe", "suv", "honda", "toyota", "ford", "chevy", "bmw",
+    "lexus", "audi", "nissan", "hyundai", "kia", "jeep", "dodge",
+    "chrysler", "cadillac", "lincoln", "volvo", "subaru", "mazda",
+    "foot cover", "face shield", "scaffolding", "pvc", "lumber",
+    "plywood", "drywall", "concrete", "roofing", "flooring", "tile",
+    "cabinet", "appliance", "washer", "refrigerator", "dishwasher",
+    "microwave", "stove", "mattress",
+]
+
+
+def is_likely_painting(listing: Listing) -> bool:
+    """Filter out listings that aren't actual paintings."""
+    title = listing.title.lower()
+    for kw in JUNK_KEYWORDS:
+        if kw in title:
+            return False
+    # Must have "paint" somewhere in the title to be safe
+    if "paint" not in title and "art" not in title and "canvas" not in title:
+        return False
+    return True
+
+
 def scrape(
     query: str = "painting",
     min_price: int | None = None,
@@ -179,7 +206,10 @@ def scrape(
             seen.add(listing.title)
             unique.append(listing)
 
-    print(f"Found {len(unique)} unique listings (from {len(listings)} total)")
+    # Filter out non-painting junk
+    before = len(unique)
+    unique = [l for l in unique if is_likely_painting(l)]
+    print(f"Found {len(unique)} paintings (filtered {before - len(unique)} junk from {before} unique)")
     return unique
 
 
