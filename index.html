@@ -24,6 +24,7 @@
     --light-gray: #ccc;
     --transition-speed: 0.45s;
     --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   html, body {
@@ -244,13 +245,13 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding-top: var(--nav-height);
-    transition: opacity var(--transition-speed) var(--ease),
-                transform var(--transition-speed) var(--ease);
+    transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
   }
 
-  #grid-view.zooming-out {
-    opacity: 0;
-    transform: scale(0.95);
+  #grid-view.dimmed {
+    opacity: 0.15;
+    transform: scale(0.97);
+    pointer-events: none;
   }
 
   .grid {
@@ -338,21 +339,12 @@
     display: flex;
     flex-direction: column;
     opacity: 0;
-    transform: scale(1.08);
     pointer-events: none;
-    transition: opacity var(--transition-speed) var(--ease),
-                transform var(--transition-speed) var(--ease);
   }
 
   #detail-view.active {
     opacity: 1;
-    transform: scale(1);
     pointer-events: all;
-  }
-
-  #detail-view.closing {
-    opacity: 0;
-    transform: scale(1.08);
   }
 
   /* ─── DETAIL NAV ─── */
@@ -410,12 +402,12 @@
     max-width: 100%;
     max-height: 65vh;
     object-fit: contain;
-    transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+    will-change: transform;
   }
 
   .detail-image-area img.switching {
     opacity: 0;
-    transform: scale(0.96);
+    transition: opacity 0.2s ease;
   }
 
   /* ─── CAROUSEL ARROWS ─── */
@@ -470,7 +462,15 @@
     font-weight: 500;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .detail-artist {
+    font-size: 12px;
+    color: var(--gray);
     margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .detail-price {
@@ -487,6 +487,15 @@
 
   .detail-score {
     display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray);
+    margin-bottom: 4px;
+  }
+
+  .detail-value {
+    display: block;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -512,7 +521,7 @@
     color: var(--white);
   }
 
-  /* ─── EXPAND BUTTON (like Yeezy +) ─── */
+  /* ─── EXPAND BUTTON ─── */
   .expand-btn {
     display: flex;
     align-items: center;
@@ -548,7 +557,7 @@
     opacity: 1;
   }
 
-  /* ─── GRID / DETAIL NEIGHBOR NAV ─── */
+  /* ─── NEIGHBOR NAV ─── */
   .neighbor-nav {
     position: fixed;
     bottom: 20px;
@@ -671,6 +680,7 @@
         <button data-price="200to1000">$200 - $1K</button>
         <button data-price="over1000">$1K+</button>
         <button data-price="best" style="margin-left:8px">BEST</button>
+        <button data-price="gems">GEMS</button>
       </div>
     </div>
     <span class="nav-count" id="nav-count"></span>
@@ -691,7 +701,7 @@
   <div id="detail-view">
     <div class="detail-nav">
       <button onclick="closeDetail()" aria-label="Back">&#8249;</button>
-      <button style="font-size:14px; visibility:hidden;">&#128722;</button>
+      <button id="share-btn" onclick="copyPermalink()" aria-label="Copy link" style="font-size:14px;" title="Copy link">&#8599;</button>
     </div>
     <div class="detail-content">
       <div class="detail-image-area">
@@ -702,8 +712,10 @@
       <div class="dots" id="dots"></div>
       <div class="detail-info">
         <div class="detail-title" id="detail-title"></div>
+        <div class="detail-artist" id="detail-artist"></div>
         <div class="detail-price" id="detail-price"></div>
         <div class="detail-score" id="detail-score"></div>
+        <div class="detail-value" id="detail-value"></div>
         <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+</button>
         <div class="detail-extra" id="detail-extra">
           <div class="detail-location" id="detail-location"></div>
@@ -713,7 +725,7 @@
     </div>
   </div>
 
-  <!-- NEIGHBOR NAV (prev/next painting in detail) -->
+  <!-- NEIGHBOR NAV -->
   <div class="neighbor-nav" id="neighbor-nav">
     <button onclick="prevPainting()">&#8249; PREV</button>
     <button onclick="nextPainting()">NEXT &#8250;</button>
@@ -727,6 +739,36 @@
   let currentImageIndex = 0;
   let currentRegion = 'all';
   let currentPrice = 'all';
+  let flipTimeouts = [];
+
+  function clearFlipTimeouts() {
+    flipTimeouts.forEach(id => clearTimeout(id));
+    flipTimeouts = [];
+  }
+
+  // Extract Craigslist post ID from URL
+  function getPaintingId(painting) {
+    if (!painting.url) return null;
+    const m = painting.url.match(/\/(\d+)\.html/);
+    return m ? m[1] : null;
+  }
+
+  // Find painting by ID across all paintings
+  function findPaintingById(id) {
+    return paintings.findIndex(p => getPaintingId(p) === id);
+  }
+
+  // Update URL hash without triggering popstate
+  let suppressHashChange = false;
+  function setHash(id) {
+    suppressHashChange = true;
+    if (id) {
+      history.pushState(null, '', '#' + id);
+    } else {
+      history.pushState(null, '', window.location.pathname);
+    }
+    suppressHashChange = false;
+  }
 
   // Load paintings
   fetch('paintings.json')
@@ -735,6 +777,7 @@
       paintings = data.filter(p => p.images && p.images.length > 0);
       filtered = [...paintings];
       renderGrid();
+      checkPermalink();
     });
 
   // Shorten title for grid
@@ -747,21 +790,21 @@
   // Apply both region + price filters
   function applyFilters() {
     filtered = paintings.filter(p => {
-      // Region filter
       if (currentRegion !== 'all' && p.region !== currentRegion) return false;
-      // Price filter
       switch (currentPrice) {
         case 'under50': return p.price !== null && p.price < 50;
         case '50to200': return p.price !== null && p.price >= 50 && p.price <= 200;
         case '200to1000': return p.price !== null && p.price > 200 && p.price <= 1000;
         case 'over1000': return p.price !== null && p.price > 1000;
         case 'best': return p.art_score != null;
+        case 'gems': return p.value_score != null;
         default: return true;
       }
     });
-    // Sort by art score when "BEST" is active
     if (currentPrice === 'best') {
       filtered.sort((a, b) => (b.art_score || 0) - (a.art_score || 0));
+    } else if (currentPrice === 'gems') {
+      filtered.sort((a, b) => (b.value_score || 0) - (a.value_score || 0));
     }
     renderGrid();
   }
@@ -798,7 +841,7 @@
       const item = document.createElement('div');
       item.className = 'grid-item';
       item.style.animationDelay = `${Math.min(i * 0.03, 1.2)}s`;
-      item.onclick = () => openDetail(i);
+      item.onclick = () => openDetail(i, item);
 
       item.innerHTML = `
         <div class="grid-item-img-wrap">
@@ -810,13 +853,15 @@
     });
   }
 
-  // Open detail view with zoom animation
-  function openDetail(index) {
+  // Populate detail view content (shared by open and switch)
+  function populateDetail(index) {
     currentIndex = index;
     currentImageIndex = 0;
     const painting = filtered[index];
 
-    // Populate detail
+    const id = getPaintingId(painting);
+    if (id) setHash(id);
+
     document.getElementById('detail-title').textContent = painting.title;
     document.getElementById('detail-price').textContent = painting.price
       ? `$${painting.price.toLocaleString()}`
@@ -824,13 +869,33 @@
     document.getElementById('detail-location').textContent = painting.location || '';
     document.getElementById('detail-link').href = painting.url || '#';
 
-    // Art score + CLIP style
+    // Art score + style
     const scoreEl = document.getElementById('detail-score');
     if (painting.art_score != null) {
       const topStyle = painting.clip_styles && painting.clip_styles[0] ? painting.clip_styles[0].style : '';
-      scoreEl.textContent = `Art Score: ${painting.art_score.toFixed(1)}${topStyle ? ' · ' + topStyle : ''}`;
+      scoreEl.textContent = `Art Score: ${painting.art_score.toFixed(1)}${topStyle ? ' \u00b7 ' + topStyle : ''}`;
     } else {
       scoreEl.textContent = '';
+    }
+
+    // Artist
+    const artistEl = document.getElementById('detail-artist');
+    if (painting.artist) {
+      artistEl.textContent = painting.artist;
+      artistEl.style.display = '';
+    } else {
+      artistEl.textContent = '';
+      artistEl.style.display = 'none';
+    }
+
+    // Value score
+    const valueEl = document.getElementById('detail-value');
+    if (painting.value_score != null) {
+      valueEl.textContent = `Value: ${painting.value_score.toFixed(1)}`;
+      valueEl.style.display = '';
+    } else {
+      valueEl.textContent = '';
+      valueEl.style.display = 'none';
     }
 
     // Reset expand
@@ -842,32 +907,201 @@
     img.src = painting.images[0];
     img.alt = painting.title;
 
-    // Render dots
     renderDots(painting.images);
 
-    // Animate in
-    const detail = document.getElementById('detail-view');
-    detail.classList.remove('closing');
-    detail.classList.add('active');
-    document.getElementById('main-nav').classList.add('hidden');
-    document.getElementById('neighbor-nav').classList.add('active');
-
-    // Hide arrows if single image
+    // Arrows
     document.querySelector('.arrow-left').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
     document.querySelector('.arrow-right').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
   }
 
-  // Close detail with zoom-out animation
-  function closeDetail() {
+  // ─── FLIP OPEN ───
+  function openDetail(index, clickedEl) {
+    clearFlipTimeouts();
+    populateDetail(index);
+
     const detail = document.getElementById('detail-view');
-    detail.classList.add('closing');
+    const detailImg = document.getElementById('detail-img');
+    const detailNav = detail.querySelector('.detail-nav');
+    const detailInfo = detail.querySelector('.detail-info');
+
+    // Reset all inline styles
+    detail.style.cssText = '';
+    detailImg.style.cssText = '';
+    detailNav.style.cssText = '';
+    detailInfo.style.cssText = '';
+
+    // Get thumbnail rect
+    let thumbRect = null;
+    if (clickedEl) {
+      const img = clickedEl.querySelector('.grid-item-img-wrap img');
+      if (img) thumbRect = img.getBoundingClientRect();
+    }
+
+    // Dim grid
+    document.getElementById('grid-view').classList.add('dimmed');
+    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('neighbor-nav').classList.add('active');
+
+    if (thumbRect) {
+      // FLIP path: transparent bg, image at thumbnail position
+      detail.style.background = 'rgba(255, 255, 255, 0)';
+      detail.style.opacity = '1';
+      detailNav.style.opacity = '0';
+      detailNav.style.transform = 'translateY(-20px)';
+      detailInfo.style.opacity = '0';
+      detailInfo.style.transform = 'translateY(20px)';
+      detail.classList.add('active');
+
+      requestAnimationFrame(() => {
+        const finalRect = detailImg.getBoundingClientRect();
+
+        if (finalRect.width > 0 && finalRect.height > 0) {
+          // Invert: position image at thumbnail location
+          const dx = (thumbRect.left + thumbRect.width / 2) - (finalRect.left + finalRect.width / 2);
+          const dy = (thumbRect.top + thumbRect.height / 2) - (finalRect.top + finalRect.height / 2);
+          const s = Math.min(thumbRect.width / finalRect.width, thumbRect.height / finalRect.height);
+
+          detailImg.style.transition = 'none';
+          detailImg.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+
+          requestAnimationFrame(() => {
+            // Play: animate to final position
+            detail.style.transition = 'background 0.45s ease';
+            detail.style.background = 'var(--white)';
+
+            detailImg.style.transition = 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            detailImg.style.transform = 'none';
+
+            // Stagger sub-elements
+            flipTimeouts.push(setTimeout(() => {
+              detailNav.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+              detailNav.style.opacity = '1';
+              detailNav.style.transform = 'none';
+            }, 120));
+
+            flipTimeouts.push(setTimeout(() => {
+              detailInfo.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+              detailInfo.style.opacity = '1';
+              detailInfo.style.transform = 'none';
+            }, 200));
+
+            // Cleanup after animation
+            flipTimeouts.push(setTimeout(() => {
+              detail.style.cssText = '';
+              detailImg.style.cssText = '';
+              detailNav.style.cssText = '';
+              detailInfo.style.cssText = '';
+            }, 650));
+          });
+        } else {
+          // Measurement failed — fallback
+          detail.style.cssText = '';
+          detailNav.style.cssText = '';
+          detailInfo.style.cssText = '';
+          fallbackOpen(detail);
+        }
+      });
+    } else {
+      // No FLIP source (permalink, keyboard)
+      fallbackOpen(detail);
+    }
+  }
+
+  function fallbackOpen(detail) {
+    detail.style.opacity = '0';
+    detail.style.transform = 'scale(1.04)';
+    detail.classList.add('active');
+
+    requestAnimationFrame(() => {
+      detail.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+      detail.style.opacity = '1';
+      detail.style.transform = 'scale(1)';
+
+      flipTimeouts.push(setTimeout(() => {
+        detail.style.cssText = '';
+      }, 450));
+    });
+  }
+
+  // ─── FLIP CLOSE ───
+  function closeDetail() {
+    clearFlipTimeouts();
+    setHash(null);
+
+    const detail = document.getElementById('detail-view');
+    const detailImg = document.getElementById('detail-img');
+    const detailNav = detail.querySelector('.detail-nav');
+    const detailInfo = detail.querySelector('.detail-info');
+
+    // Find target grid item to fly back to
+    let targetRect = null;
+    const gridItems = document.querySelectorAll('.grid-item');
+    if (gridItems[currentIndex]) {
+      const img = gridItems[currentIndex].querySelector('.grid-item-img-wrap img');
+      if (img) {
+        const rect = img.getBoundingClientRect();
+        if (rect.width > 0) targetRect = rect;
+      }
+    }
+
+    // Undim grid
+    document.getElementById('grid-view').classList.remove('dimmed');
     document.getElementById('main-nav').classList.remove('hidden');
     document.getElementById('neighbor-nav').classList.remove('active');
 
-    setTimeout(() => {
+    if (targetRect) {
+      const imgRect = detailImg.getBoundingClientRect();
+      if (imgRect.width > 0) {
+        const dx = (targetRect.left + targetRect.width / 2) - (imgRect.left + imgRect.width / 2);
+        const dy = (targetRect.top + targetRect.height / 2) - (imgRect.top + imgRect.height / 2);
+        const s = Math.min(targetRect.width / imgRect.width, targetRect.height / imgRect.height);
+
+        // Hide sub-elements fast
+        detailNav.style.transition = 'opacity 0.15s ease';
+        detailNav.style.opacity = '0';
+        detailInfo.style.transition = 'opacity 0.15s ease';
+        detailInfo.style.opacity = '0';
+
+        // Fly image back
+        detailImg.style.transition = 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+        detailImg.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+
+        // Fade background
+        detail.style.transition = 'background 0.35s ease';
+        detail.style.background = 'rgba(255, 255, 255, 0)';
+
+        flipTimeouts.push(setTimeout(() => {
+          detail.classList.remove('active');
+          detail.style.cssText = '';
+          detailImg.style.cssText = '';
+          detailNav.style.cssText = '';
+          detailInfo.style.cssText = '';
+        }, 450));
+        return;
+      }
+    }
+
+    // Fallback close
+    detail.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+    detail.style.opacity = '0';
+    detail.style.transform = 'scale(1.04)';
+
+    flipTimeouts.push(setTimeout(() => {
       detail.classList.remove('active');
-      detail.classList.remove('closing');
-    }, 450);
+      detail.style.cssText = '';
+    }, 400));
+  }
+
+  // ─── SWITCH PAINTING (prev/next, no FLIP) ───
+  function switchPainting(newIndex) {
+    const img = document.getElementById('detail-img');
+    img.classList.add('switching');
+
+    setTimeout(() => {
+      populateDetail(newIndex);
+      document.querySelector('.detail-content').scrollTop = 0;
+      img.classList.remove('switching');
+    }, 200);
   }
 
   // Image carousel
@@ -891,14 +1125,12 @@
     currentImageIndex = index;
     const img = document.getElementById('detail-img');
 
-    // Animate switch
     img.classList.add('switching');
     setTimeout(() => {
       img.src = painting.images[index];
       img.classList.remove('switching');
     }, 200);
 
-    // Update dots
     document.querySelectorAll('.dot').forEach((d, i) => {
       d.classList.toggle('active', i === index);
     });
@@ -918,16 +1150,16 @@
     goToImage(prev);
   }
 
-  // Navigate between paintings in detail view
+  // Navigate between paintings
   function nextPainting() {
     if (currentIndex < filtered.length - 1) {
-      openDetail(currentIndex + 1);
+      switchPainting(currentIndex + 1);
     }
   }
 
   function prevPainting() {
     if (currentIndex > 0) {
-      openDetail(currentIndex - 1);
+      switchPainting(currentIndex - 1);
     }
   }
 
@@ -952,11 +1184,73 @@
     document.getElementById('grid-view').scrollTop = 0;
   }
 
+  // Copy permalink
+  function copyPermalink() {
+    const painting = filtered[currentIndex];
+    if (!painting) return;
+    const id = getPaintingId(painting);
+    const url = window.location.origin + window.location.pathname + '#' + id;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.getElementById('share-btn');
+      btn.textContent = '\u2713';
+      setTimeout(() => { btn.innerHTML = '&#8599;'; }, 1200);
+    });
+  }
+
   // Side menu
   function toggleMenu() {
     document.getElementById('side-menu').classList.toggle('open');
     document.getElementById('menu-btn').classList.toggle('open');
   }
+
+  // Permalink
+  function checkPermalink() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    let idx = filtered.findIndex(p => getPaintingId(p) === hash);
+    if (idx >= 0) {
+      openDetail(idx);
+      return;
+    }
+    const allIdx = findPaintingById(hash);
+    if (allIdx >= 0) {
+      currentRegion = 'all';
+      currentPrice = 'all';
+      document.querySelectorAll('#region-filters button').forEach(b => {
+        b.classList.toggle('active', b.dataset.region === 'all');
+      });
+      document.querySelectorAll('#price-filters button').forEach(b => {
+        b.classList.toggle('active', b.dataset.price === 'all');
+      });
+      filtered = [...paintings];
+      renderGrid();
+      idx = filtered.findIndex(p => getPaintingId(p) === hash);
+      if (idx >= 0) openDetail(idx);
+    }
+  }
+
+  // Browser back/forward
+  window.addEventListener('popstate', () => {
+    if (suppressHashChange) return;
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const idx = filtered.findIndex(p => getPaintingId(p) === hash);
+      if (idx >= 0) {
+        suppressHashChange = true;
+        if (document.getElementById('detail-view').classList.contains('active')) {
+          switchPainting(idx);
+        } else {
+          openDetail(idx);
+        }
+        suppressHashChange = false;
+      }
+    } else {
+      const detail = document.getElementById('detail-view');
+      if (detail.classList.contains('active')) {
+        closeDetail();
+      }
+    }
+  });
 
   // Keyboard nav
   document.addEventListener('keydown', (e) => {

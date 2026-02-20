@@ -1,8 +1,9 @@
 """
-CLIP-based painting quality scorer.
+CLIP-based painting quality scorer with LAION aesthetic predictor.
 
-Downloads painting thumbnails, runs CLIP embeddings + aesthetic scoring,
-and enriches paintings.json with quality metrics.
+Downloads painting thumbnails, runs CLIP ViT-L/14 embeddings,
+scores aesthetics with the LAION improved-aesthetic-predictor MLP,
+parses artist names, computes value scores, and enriches paintings.json.
 
 Usage:
     python scorer.py                    # Score all paintings
@@ -12,7 +13,9 @@ Usage:
 
 import argparse
 import json
+import math
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -23,20 +26,19 @@ from PIL import Image
 
 # Lazy imports for CLIP
 open_clip = None
-tokenizer_fn = None
 
 
 def load_clip():
-    """Load CLIP model (ViT-B/32) and preprocessing."""
+    """Load CLIP model (ViT-L/14) and preprocessing."""
     global open_clip
     import open_clip as oc
     open_clip = oc
 
-    print("Loading CLIP model (ViT-B/32)...")
+    print("Loading CLIP model (ViT-L/14)...")
     model, _, preprocess = oc.create_model_and_transforms(
-        "ViT-B-32", pretrained="openai"
+        "ViT-L-14", pretrained="openai"
     )
-    tokenizer = oc.get_tokenizer("ViT-B-32")
+    tokenizer = oc.get_tokenizer("ViT-L-14")
     model.eval()
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -46,48 +48,57 @@ def load_clip():
     return model, preprocess, tokenizer, device
 
 
-# ─── AESTHETIC PREDICTOR ───
-# Simple linear aesthetic predictor trained on LAION aesthetics data
-# This is a lightweight MLP that maps CLIP embeddings → aesthetic score (1-10)
+# ─── LAION AESTHETIC MLP ───
+# MLP from christophschuhmann/improved-aesthetic-predictor
+# Trained on LAION aesthetics data, outputs calibrated 1-10 scores
+# Architecture must match exactly (no ReLU activations — they're commented out in the original)
 
-class AestheticPredictor(torch.nn.Module):
-    """Lightweight aesthetic MLP on top of CLIP features."""
-    def __init__(self, input_dim=512):
+LAION_WEIGHTS_URL = "https://github.com/christophschuhmann/improved-aesthetic-predictor/raw/main/sac+logos+ava1-l14-linearMSE.pth"
+LAION_WEIGHTS_PATH = Path("sac+logos+ava1-l14-linearMSE.pth")
+
+
+class LAIONAestheticMLP(torch.nn.Module):
+    """LAION improved-aesthetic-predictor MLP (768 → 1)."""
+    def __init__(self, input_size=768):
         super().__init__()
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, 256),
-            torch.nn.ReLU(),
+            torch.nn.Linear(input_size, 1024),
             torch.nn.Dropout(0.2),
-            torch.nn.Linear(256, 64),
-            torch.nn.ReLU(),
+            torch.nn.Linear(1024, 128),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(128, 64),
             torch.nn.Dropout(0.1),
-            torch.nn.Linear(64, 1),
+            torch.nn.Linear(64, 16),
+            torch.nn.Linear(16, 1),
         )
 
     def forward(self, x):
         return self.layers(x)
 
 
+def download_laion_weights():
+    """Download LAION aesthetic predictor weights if not present."""
+    if LAION_WEIGHTS_PATH.exists():
+        return
+    print("  Downloading LAION aesthetic weights...")
+    resp = requests.get(LAION_WEIGHTS_URL, timeout=60)
+    resp.raise_for_status()
+    LAION_WEIGHTS_PATH.write_bytes(resp.content)
+    print(f"  Saved {LAION_WEIGHTS_PATH} ({len(resp.content) / 1024:.0f} KB)")
+
+
 def load_aesthetic_model(device):
-    """Load or initialize the aesthetic predictor."""
-    model = AestheticPredictor(input_dim=512).to(device)
-    weights_path = Path("aesthetic_model.pth")
-
-    if weights_path.exists():
-        model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
-        print("  Loaded aesthetic model weights")
-    else:
-        # No pretrained weights available — use CLIP text prompts as proxy
-        print("  No aesthetic weights found — using CLIP prompt-based scoring")
-        return None
-
+    """Load LAION aesthetic predictor."""
+    download_laion_weights()
+    model = LAIONAestheticMLP(input_size=768).to(device)
+    state_dict = torch.load(LAION_WEIGHTS_PATH, map_location=device, weights_only=True)
+    model.load_state_dict(state_dict)
     model.eval()
+    print("  Loaded LAION aesthetic predictor")
     return model
 
 
 # ─── CLIP PROMPT-BASED QUALITY SCORING ───
-# When we don't have a trained aesthetic model, use CLIP text-image similarity
-# to score quality against curated prompts
 
 QUALITY_PROMPTS = {
     "high": [
@@ -119,14 +130,10 @@ def compute_prompt_scores(model, tokenizer, image_features, device):
     high_feats /= high_feats.norm(dim=-1, keepdim=True)
     low_feats /= low_feats.norm(dim=-1, keepdim=True)
 
-    # Average similarity to high vs low prompts
     high_sim = (image_features @ high_feats.T).mean(dim=-1)
     low_sim = (image_features @ low_feats.T).mean(dim=-1)
 
-    # Convert to 0-100 score
-    # Higher high_sim and lower low_sim = better
     raw = high_sim - low_sim
-    # Normalize to roughly 0-100 range
     scores = ((raw + 0.15) / 0.30 * 100).clamp(0, 100)
 
     return scores.cpu().numpy()
@@ -155,7 +162,7 @@ def classify_styles(model, tokenizer, image_features, device):
     text_feats = model.encode_text(texts)
     text_feats /= text_feats.norm(dim=-1, keepdim=True)
 
-    sims = image_features @ text_feats.T  # (N, num_styles)
+    sims = image_features @ text_feats.T
     probs = sims.softmax(dim=-1).cpu().numpy()
 
     style_names = list(STYLE_PROMPTS.keys())
@@ -170,6 +177,86 @@ def classify_styles(model, tokenizer, image_features, device):
         results.append(styles)
 
     return results
+
+
+# ─── ARTIST NAME PARSING ───
+
+BY_EXCLUSIONS = {
+    "numbers", "hand", "the", "a", "an", "owner", "seller", "appointment",
+    "local", "estate", "unknown", "anonymous", "various", "multiple",
+    "me", "us", "them", "request", "design", "nature", "mail",
+}
+
+KNOWN_ARTISTS = {
+    "picasso", "monet", "renoir", "cezanne", "matisse", "kandinsky",
+    "warhol", "basquiat", "hockney", "pollock", "rothko", "koons",
+    "banksy", "dali", "miro", "chagall", "rembrandt", "vermeer",
+    "caravaggio", "klimt", "schiele", "mondrian", "magritte",
+    "lichtenstein", "rockwell", "wyeth", "homer", "hopper",
+    "okeefe", "o'keeffe", "rivera", "kahlo", "botero",
+    "thiebaud", "diebenkorn", "ruscha", "baldessari",
+}
+
+
+def parse_artist(title):
+    """Extract artist name from painting title.
+
+    Returns (artist_name, confidence) or (None, None).
+    """
+    if not title:
+        return None, None
+
+    t = title.strip()
+
+    # Pattern 1: "... by [Name]" — highest confidence
+    m = re.search(r'\bby\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})', t)
+    if m:
+        name = m.group(1).strip()
+        first_word = name.split()[0].lower()
+        if first_word not in BY_EXCLUSIONS and len(name) > 2:
+            return name, "high"
+
+    # Pattern 2: "Signed [Name]" or "Signature [Name]"
+    m = re.search(
+        r'\b(?:signed|signature)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+        t, re.IGNORECASE,
+    )
+    if m:
+        name = m.group(1).strip()
+        if len(name) > 2 and name.lower() not in {"on", "in", "and", "the", "by"}:
+            return name, "medium"
+
+    # Pattern 3: "Artist [Name]" or "Artist: [Name]"
+    m = re.search(
+        r'\bartist:?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})',
+        t, re.IGNORECASE,
+    )
+    if m:
+        name = m.group(1).strip()
+        if len(name) > 2:
+            return name, "medium"
+
+    # Pattern 4: Known famous names anywhere in title
+    t_lower = t.lower()
+    for artist in KNOWN_ARTISTS:
+        if artist in t_lower:
+            idx = t_lower.index(artist)
+            found = t[idx:idx + len(artist)]
+            return found.title(), "low"
+
+    return None, None
+
+
+# ─── VALUE SCORE ───
+
+def compute_value_score(art_score, price):
+    """Compute gem/value score: high art + low price = high value.
+
+    Formula: (art_score / 100) / log(price + 1) * 100
+    """
+    if art_score is None or price is None or price <= 0:
+        return None
+    return round((art_score / 100) / math.log(price + 1) * 100, 1)
 
 
 # ─── IMAGE DOWNLOAD ───
@@ -223,16 +310,20 @@ def score_paintings(paintings, limit=None, skip_download=False):
     else:
         print("\n1. Skipping download (--skip-download)")
 
-    # 2. Load CLIP
-    print("\n2. Loading CLIP...")
+    # 2. Load CLIP (ViT-L/14)
+    print("\n2. Loading CLIP (ViT-L/14)...")
     model, preprocess, tokenizer, device = load_clip()
 
-    # 3. Encode all images
-    print(f"\n3. Encoding {len(items)} images...")
+    # 3. Load LAION aesthetic predictor
+    print("\n3. Loading LAION aesthetic predictor...")
+    aesthetic_model = load_aesthetic_model(device)
+
+    # 4. Encode all images
+    print(f"\n4. Encoding {len(items)} images...")
     all_features = []
     valid_indices = []
 
-    batch_size = 32
+    batch_size = 16  # Smaller batches for ViT-L/14
     batch_images = []
     batch_indices = []
 
@@ -275,46 +366,90 @@ def score_paintings(paintings, limit=None, skip_download=False):
     image_features = torch.cat(all_features, dim=0)
     print(f"  Encoded {len(valid_indices)} images total")
 
-    # 4. Quality scoring
-    print("\n4. Computing quality scores...")
-    quality_scores = compute_prompt_scores(model, tokenizer, image_features, device)
+    # 5. LAION aesthetic scoring
+    print("\n5. Computing LAION aesthetic scores...")
+    aesthetic_scores = aesthetic_model(image_features).squeeze(-1).cpu().numpy()
+    print(f"  Aesthetic range: {aesthetic_scores.min():.2f} – {aesthetic_scores.max():.2f}")
 
-    # 5. Style classification
-    print("\n5. Classifying styles...")
+    # 6. Prompt-based quality scoring
+    print("\n6. Computing prompt quality scores...")
+    prompt_scores = compute_prompt_scores(model, tokenizer, image_features, device)
+
+    # 7. Style classification
+    print("\n7. Classifying styles...")
     styles = classify_styles(model, tokenizer, image_features, device)
 
-    # 6. Compute visual similarity (find unique vs derivative)
-    print("\n6. Computing uniqueness scores...")
+    # 8. Uniqueness
+    print("\n8. Computing uniqueness scores...")
     sim_matrix = (image_features @ image_features.T).cpu().numpy()
     np.fill_diagonal(sim_matrix, 0)
-    # Uniqueness = inverse of average similarity to other paintings
     avg_similarity = sim_matrix.mean(axis=1)
     uniqueness = ((1 - avg_similarity) * 100).clip(0, 100)
 
-    # 7. Assign scores back to paintings
-    print("\n7. Enriching painting data...")
+    # 9. Parse artist names
+    print("\n9. Parsing artist names...")
+    artist_count = 0
+    for p in items:
+        artist, confidence = parse_artist(p.get("title", ""))
+        if artist:
+            p["artist"] = artist
+            p["artist_confidence"] = confidence
+            artist_count += 1
+        else:
+            p["artist"] = None
+            p["artist_confidence"] = None
+    print(f"  Found {artist_count} artist names")
+
+    # 10. Enrich painting data
+    print("\n10. Enriching painting data...")
+    # Normalize LAION scores to 0-100 for composite
+    aes_min, aes_max = float(aesthetic_scores.min()), float(aesthetic_scores.max())
+    aes_range = aes_max - aes_min if aes_max > aes_min else 1.0
+    laion_norm = (aesthetic_scores - aes_min) / aes_range * 100
+
     for j, idx in enumerate(valid_indices):
-        items[idx]["quality_score"] = round(float(quality_scores[j]), 1)
+        items[idx]["aesthetic_score"] = round(float(aesthetic_scores[j]), 2)
+        items[idx]["quality_score"] = round(float(prompt_scores[j]), 1)
         items[idx]["clip_styles"] = styles[j]
         items[idx]["uniqueness"] = round(float(uniqueness[j]), 1)
 
-        # Composite "art score" = weighted blend
-        q = quality_scores[j]
+        # Composite art score: LAION 50% + prompt quality 20% + uniqueness 30%
+        ln = laion_norm[j]
+        pq = prompt_scores[j]
         u = uniqueness[j]
-        items[idx]["art_score"] = round(float(q * 0.7 + u * 0.3), 1)
+        items[idx]["art_score"] = round(float(ln * 0.5 + pq * 0.2 + u * 0.3), 1)
+
+        # Value score
+        items[idx]["value_score"] = compute_value_score(
+            items[idx]["art_score"],
+            items[idx].get("price"),
+        )
 
     # Stats
-    scored = [p for p in items if "art_score" in p]
+    scored = [p for p in items if p.get("art_score") is not None]
     if scored:
         scores = [p["art_score"] for p in scored]
+        aes = [p["aesthetic_score"] for p in scored if p.get("aesthetic_score") is not None]
         print(f"\n--- Scoring complete ---")
         print(f"Scored: {len(scored)} paintings")
         print(f"Art score range: {min(scores):.1f} – {max(scores):.1f}")
         print(f"Median art score: {sorted(scores)[len(scores)//2]:.1f}")
+        if aes:
+            print(f"LAION aesthetic range: {min(aes):.2f} – {max(aes):.2f}")
+            print(f"Median LAION aesthetic: {sorted(aes)[len(aes)//2]:.2f}")
 
-        # Top 5
+        artists = [p for p in items if p.get("artist")]
+        print(f"Artists found: {len(artists)}")
+
+        gems = [p for p in scored if p.get("value_score") is not None]
+        if gems:
+            top_gems = sorted(gems, key=lambda p: p["value_score"], reverse=True)[:5]
+            print(f"\nTop 5 Gems (value score):")
+            for p in top_gems:
+                print(f"  {p['value_score']:.1f} | art:{p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:50]}")
+
         top = sorted(scored, key=lambda p: p["art_score"], reverse=True)[:5]
-        print(f"\nTop 5:")
+        print(f"\nTop 5 (art score):")
         for p in top:
             print(f"  {p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:60]}")
 

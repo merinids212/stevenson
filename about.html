@@ -151,7 +151,47 @@
     — just paintings and the people selling them.
   </p>
 
+  <p>
+    Each painting is scored by a CLIP ViT-L/14 vision model
+    and the LAION improved-aesthetic-predictor, a neural network
+    trained on human aesthetic ratings. Artist names are extracted
+    from titles via pattern matching, and a value score surfaces
+    underpriced gems — high art quality relative to asking price.
+  </p>
+
   <div class="about-stats" id="stats"></div>
+
+  <h1>How It Works</h1>
+
+  <p>
+    <strong>scraper.py</strong> — Crawls Craigslist art listings
+    across California regions. Downloads metadata, images, prices,
+    and locations into paintings.csv, then converts to paintings.json.
+  </p>
+
+  <p>
+    <strong>scorer.py</strong> — Runs every painting through
+    OpenAI's CLIP ViT-L/14 to extract visual embeddings (768-dim),
+    then scores them three ways: the LAION aesthetic MLP (calibrated
+    1–10), CLIP prompt quality (high vs low art similarity), and
+    uniqueness (inverse average cosine similarity to all other
+    paintings). The composite art score blends LAION (50%),
+    prompt quality (20%), and uniqueness (30%). It also parses
+    artist names from titles and computes a value score for
+    gem finding.
+  </p>
+
+  <p>
+    <strong>index.html</strong> — The gallery. Grid view with
+    region and price filters, FLIP animations from thumbnail to
+    detail, and a GEMS filter that sorts by value score.
+  </p>
+
+  <p>
+    <strong>analytics.html</strong> — Dashboard with score
+    distributions, style/region/medium breakdowns, and an
+    explorer table for hunting specific paintings.
+  </p>
 
   <a class="about-link" href="index.html">Browse Gallery</a>
 </div>
@@ -166,11 +206,18 @@
       const prices = priced.map(p => p.price);
       const median = prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)];
 
+      const scored = paintings.filter(p => p.art_score != null);
+      const artists = paintings.filter(p => p.artist);
+      const gems = paintings.filter(p => p.value_score != null);
+
       const stats = [
         ['Listings', paintings.length.toLocaleString()],
         ['Regions', regions.size],
         ['Price range', `$${Math.min(...prices).toLocaleString()} — $${Math.max(...prices).toLocaleString()}`],
         ['Median price', `$${median.toLocaleString()}`],
+        ['CLIP scored', scored.length.toLocaleString()],
+        ['Artists parsed', artists.length.toLocaleString()],
+        ['Model', 'ViT-L/14 + LAION MLP'],
       ];
 
       const container = document.getElementById('stats');
