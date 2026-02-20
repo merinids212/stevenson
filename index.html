@@ -485,6 +485,15 @@
     margin-bottom: 16px;
   }
 
+  .detail-score {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray);
+    margin-bottom: 12px;
+  }
+
   .detail-link {
     display: inline-block;
     font-family: var(--font);
@@ -661,6 +670,7 @@
         <button data-price="50to200">$50 - $200</button>
         <button data-price="200to1000">$200 - $1K</button>
         <button data-price="over1000">$1K+</button>
+        <button data-price="best" style="margin-left:8px">BEST</button>
       </div>
     </div>
     <span class="nav-count" id="nav-count"></span>
@@ -693,6 +703,7 @@
       <div class="detail-info">
         <div class="detail-title" id="detail-title"></div>
         <div class="detail-price" id="detail-price"></div>
+        <div class="detail-score" id="detail-score"></div>
         <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+</button>
         <div class="detail-extra" id="detail-extra">
           <div class="detail-location" id="detail-location"></div>
@@ -744,9 +755,14 @@
         case '50to200': return p.price !== null && p.price >= 50 && p.price <= 200;
         case '200to1000': return p.price !== null && p.price > 200 && p.price <= 1000;
         case 'over1000': return p.price !== null && p.price > 1000;
+        case 'best': return p.art_score != null;
         default: return true;
       }
     });
+    // Sort by art score when "BEST" is active
+    if (currentPrice === 'best') {
+      filtered.sort((a, b) => (b.art_score || 0) - (a.art_score || 0));
+    }
     renderGrid();
   }
 
@@ -807,6 +823,15 @@
       : 'INQUIRE';
     document.getElementById('detail-location').textContent = painting.location || '';
     document.getElementById('detail-link').href = painting.url || '#';
+
+    // Art score + CLIP style
+    const scoreEl = document.getElementById('detail-score');
+    if (painting.art_score != null) {
+      const topStyle = painting.clip_styles && painting.clip_styles[0] ? painting.clip_styles[0].style : '';
+      scoreEl.textContent = `Art Score: ${painting.art_score.toFixed(1)}${topStyle ? ' · ' + topStyle : ''}`;
+    } else {
+      scoreEl.textContent = '';
+    }
 
     // Reset expand
     document.getElementById('expand-btn').classList.remove('open');

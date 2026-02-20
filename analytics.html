@@ -255,6 +255,31 @@
   <!-- TOP STATS -->
   <div class="stats-row" id="stats-row"></div>
 
+  <!-- CLIP SCORES -->
+  <div class="section">
+    <div class="section-title">CLIP Quality Analysis</div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>Art Score Distribution</h3>
+        <div class="chart-wrap"><canvas id="chart-art-score"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>CLIP Style Classification</h3>
+        <div class="chart-wrap"><canvas id="chart-clip-style"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>Quality vs Uniqueness</h3>
+        <div class="chart-wrap"><canvas id="chart-quality-unique"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Avg Art Score by Region</h3>
+        <div class="chart-wrap"><canvas id="chart-score-region"></canvas></div>
+      </div>
+    </div>
+  </div>
+
   <!-- CHARTS -->
   <div class="section">
     <div class="section-title">Distribution</div>
@@ -295,14 +320,15 @@
     <div class="section-title">Explorer</div>
     <div class="filter-bar" id="explorer-filters">
       <button class="active" data-ef="all">All</button>
+      <button data-ef="top-rated">Top Rated</button>
       <button data-ef="deals">Deals</button>
       <button data-ef="oil">Oil</button>
       <button data-ef="acrylic">Acrylic</button>
       <button data-ef="watercolor">Watercolor</button>
-      <button data-ef="abstract">Abstract</button>
-      <button data-ef="vintage">Vintage</button>
+      <button data-ef="landscape">Landscape</button>
+      <button data-ef="portrait">Portrait</button>
+      <button data-ef="abstract-clip">Abstract</button>
       <button data-ef="signed">Signed</button>
-      <button data-ef="large">Large</button>
     </div>
     <table class="data-table" id="explorer-table">
       <thead>
@@ -312,7 +338,7 @@
           <th data-sort="price">Price</th>
           <th data-sort="region">Region</th>
           <th data-sort="medium">Tags</th>
-          <th data-sort="score">Score</th>
+          <th data-sort="art_score">Art Score</th>
         </tr>
       </thead>
       <tbody id="explorer-body"></tbody>
@@ -469,12 +495,17 @@ function renderStats() {
   const withMedium = allItems.filter(p => p.tags.mediums.length > 0);
   const deals = allItems.filter(p => p.dealScore >= 60);
 
+  const scored = allItems.filter(p => p.art_score != null);
+  const artScores = scored.map(p => p.art_score).sort((a, b) => a - b);
+  const medianArt = artScores.length ? artScores[Math.floor(artScores.length / 2)] : 0;
+  const topArt = scored.filter(p => p.art_score >= 55);
+
   const stats = [
     { label: 'Total Listings', value: allItems.length.toLocaleString() },
     { label: 'Regions', value: regions.size },
     { label: 'Median Price', value: `$${prices[Math.floor(prices.length / 2)]?.toLocaleString() || '—'}` },
-    { label: 'Classified Medium', value: `${Math.round(withMedium.length / allItems.length * 100)}%`, sub: `${withMedium.length} of ${allItems.length}` },
-    { label: 'Deals Found', value: deals.length, sub: 'Score >= 60' },
+    { label: 'Median Art Score', value: medianArt.toFixed(1), sub: `${scored.length} scored by CLIP` },
+    { label: 'Top Rated', value: topArt.length, sub: 'Art score >= 55' },
   ];
 
   const row = document.getElementById('stats-row');
@@ -490,12 +521,106 @@ function renderStats() {
 // ─── CHARTS ───
 
 function renderCharts() {
+  chartArtScore();
+  chartClipStyle();
+  chartQualityUnique();
+  chartScoreRegion();
   chartRegion();
   chartPriceDist();
   chartMedium();
   chartMediumPrice();
   chartStyle();
   chartRegionPrice();
+}
+
+function chartArtScore() {
+  const scored = allItems.filter(p => p.art_score != null);
+  const buckets = [35, 40, 45, 50, 55, 60, Infinity];
+  const labels = ['35-40', '40-45', '45-50', '50-55', '55-60', '60+'];
+  const counts = new Array(buckets.length - 1).fill(0);
+  scored.forEach(p => {
+    for (let i = 0; i < buckets.length - 1; i++) {
+      if (p.art_score >= (i === 0 ? 0 : buckets[i - 1]) && p.art_score < buckets[i]) { counts[i]++; break; }
+      if (i === buckets.length - 2 && p.art_score >= buckets[i]) { counts[i]++; break; }
+    }
+  });
+
+  new Chart(document.getElementById('chart-art-score'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: counts, backgroundColor: '#000', borderRadius: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' } } } },
+  });
+}
+
+function chartClipStyle() {
+  const counts = {};
+  allItems.forEach(p => {
+    if (!p.clip_styles || !p.clip_styles.length) return;
+    const topStyle = p.clip_styles[0].style;
+    counts[topStyle] = (counts[topStyle] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('chart-clip-style'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(([s]) => s),
+      datasets: [{ data: sorted.map(([, c]) => c), backgroundColor: CHART_BG }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
+    },
+  });
+}
+
+function chartQualityUnique() {
+  const scored = allItems.filter(p => p.quality_score != null && p.uniqueness != null);
+  const data = scored.map(p => ({ x: p.quality_score, y: p.uniqueness }));
+
+  new Chart(document.getElementById('chart-quality-unique'), {
+    type: 'scatter',
+    data: {
+      datasets: [{ data, backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(0,0,0,0.3)', pointRadius: 3 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Quality', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
+        y: { title: { display: true, text: 'Uniqueness', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
+      },
+    },
+  });
+}
+
+function chartScoreRegion() {
+  const groups = {};
+  allItems.forEach(p => {
+    if (p.art_score == null) return;
+    if (!groups[p.region]) groups[p.region] = [];
+    groups[p.region].push(p.art_score);
+  });
+
+  const entries = Object.entries(groups)
+    .filter(([, scores]) => scores.length >= 5)
+    .map(([r, scores]) => {
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      return [REGION_LABELS[r] || r, avg];
+    })
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  new Chart(document.getElementById('chart-score-region'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(([r]) => r),
+      datasets: [{ data: entries.map(([, s]) => s), backgroundColor: '#333', borderRadius: 1 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f0f0f0' }, min: 40 } },
+    },
+  });
 }
 
 function chartRegion() {
@@ -642,6 +767,9 @@ function applyExplorerFilter(filter) {
   });
 
   switch (filter) {
+    case 'top-rated':
+      explorerItems = allItems.filter(p => p.art_score >= 50).sort((a, b) => (b.art_score || 0) - (a.art_score || 0));
+      break;
     case 'deals':
       explorerItems = allItems.filter(p => p.dealScore >= 50).sort((a, b) => b.dealScore - a.dealScore);
       break;
@@ -654,17 +782,17 @@ function applyExplorerFilter(filter) {
     case 'watercolor':
       explorerItems = allItems.filter(p => p.tags.mediums.includes('watercolor'));
       break;
-    case 'abstract':
-      explorerItems = allItems.filter(p => p.tags.styles.includes('abstract'));
+    case 'landscape':
+      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'landscape');
       break;
-    case 'vintage':
-      explorerItems = allItems.filter(p => p.tags.styles.includes('vintage'));
+    case 'portrait':
+      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'portrait');
+      break;
+    case 'abstract-clip':
+      explorerItems = allItems.filter(p => p.clip_styles && p.clip_styles[0] && p.clip_styles[0].style === 'abstract');
       break;
     case 'signed':
       explorerItems = allItems.filter(p => p.tags.flags.includes('signed'));
-      break;
-    case 'large':
-      explorerItems = allItems.filter(p => p.tags.flags.includes('large'));
       break;
     default:
       explorerItems = [...allItems];
@@ -699,7 +827,7 @@ function applySortAndRender() {
     let va, vb;
     switch (key) {
       case 'price': va = a.price || 0; vb = b.price || 0; break;
-      case 'score': va = a.dealScore || 0; vb = b.dealScore || 0; break;
+      case 'art_score': va = a.art_score || 0; vb = b.art_score || 0; break;
       case 'region': va = a.region; vb = b.region; break;
       default: va = a.title.toLowerCase(); vb = b.title.toLowerCase();
     }
@@ -718,11 +846,12 @@ function renderTable() {
   body.innerHTML = page.map(item => {
     const tags = [
       ...item.tags.mediums.map(t => `<span class="tag medium">${t}</span>`),
-      ...item.tags.styles.map(t => `<span class="tag style">${t}</span>`),
+      ...(item.clip_styles || []).slice(0, 1).map(s => `<span class="tag style">${s.style}</span>`),
       ...item.tags.flags.map(t => `<span class="tag">${t}</span>`),
     ].join('');
 
-    const scoreColor = item.dealScore >= 60 ? '#c44' : item.dealScore >= 30 ? '#999' : '#ddd';
+    const as = item.art_score || 0;
+    const scoreColor = as >= 55 ? '#000' : as >= 50 ? '#555' : as >= 45 ? '#999' : '#ccc';
 
     return `<tr>
       <td><img class="thumb" src="${item.images[0]}" loading="lazy"></td>
@@ -730,7 +859,7 @@ function renderTable() {
       <td>${item.price ? '$' + item.price.toLocaleString() : '—'}</td>
       <td>${REGION_LABELS[item.region] || item.region}</td>
       <td>${tags || '—'}</td>
-      <td style="color:${scoreColor}; font-weight:500">${item.dealScore}</td>
+      <td style="color:${scoreColor}; font-weight:500">${as ? as.toFixed(1) : '—'}</td>
     </tr>`;
   }).join('');
 

@@ -2,7 +2,10 @@
 __pycache__/
 *.csv
 .env
+thumbs/
+*.pth
 
 # Keep paintings.json for the site, ignore other JSON
 *.json
 !paintings.json
+.vercel
