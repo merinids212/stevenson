@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEVENSON — About</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --nav-height: 64px;
+    --font: 'IBM Plex Mono', monospace;
+    --black: #000;
+    --white: #fff;
+    --gray: #999;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    background: var(--white);
+    color: var(--black);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--nav-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--white);
+    z-index: 100;
+  }
+
+  .nav-back {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    color: var(--black);
+    padding: 4px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+
+  .nav-back:hover { opacity: 0.5; }
+
+  .nav-title {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .about-content {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: calc(var(--nav-height) + 60px) 24px 80px;
+  }
+
+  .about-content h1 {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+
+  .about-content p {
+    font-size: 13px;
+    line-height: 1.8;
+    color: #333;
+    margin-bottom: 24px;
+  }
+
+  .about-content .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .about-content .stat-value {
+    color: var(--gray);
+  }
+
+  .about-stats {
+    margin-top: 48px;
+    margin-bottom: 48px;
+  }
+
+  .about-link {
+    display: inline-block;
+    font-family: var(--font);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--black);
+    border: 1px solid var(--black);
+    padding: 10px 28px;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .about-link:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-back" href="index.html">&#8249;</a>
+  <span class="nav-title">About</span>
+</nav>
+
+<div class="about-content">
+  <h1>Stevenson</h1>
+
+  <p>
+    A curated index of paintings for sale across California,
+    sourced from Craigslist listings in real time.
+  </p>
+
+  <p>
+    Every listing is scraped, filtered, and presented in a
+    clean gallery format. No accounts, no fees, no middlemen
+    — just paintings and the people selling them.
+  </p>
+
+  <div class="about-stats" id="stats"></div>
+
+  <a class="about-link" href="index.html">Browse Gallery</a>
+</div>
+
+<script>
+  fetch('paintings.json')
+    .then(r => r.json())
+    .then(data => {
+      const paintings = data.filter(p => p.images && p.images.length > 0);
+      const regions = new Set(paintings.map(p => p.region));
+      const priced = paintings.filter(p => p.price !== null);
+      const prices = priced.map(p => p.price);
+      const median = prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)];
+
+      const stats = [
+        ['Listings', paintings.length.toLocaleString()],
+        ['Regions', regions.size],
+        ['Price range', `$${Math.min(...prices).toLocaleString()} — $${Math.max(...prices).toLocaleString()}`],
+        ['Median price', `$${median.toLocaleString()}`],
+      ];
+
+      const container = document.getElementById('stats');
+      stats.forEach(([label, value]) => {
+        container.innerHTML += `<div class="stat"><span>${label}</span><span class="stat-value">${value}</span></div>`;
+      });
+    });
+</script>
+
+</body>
+</html>
