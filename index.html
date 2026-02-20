@@ -65,22 +65,29 @@
     pointer-events: none;
   }
 
+  .nav-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
   .nav-filters {
     display: flex;
-    gap: 16px;
+    gap: 14px;
     flex-wrap: wrap;
     justify-content: center;
   }
 
   .nav-filters button {
     font-family: var(--font);
-    font-size: 14px;
+    font-size: 12px;
     letter-spacing: 0.02em;
     background: none;
     border: none;
     cursor: pointer;
     color: var(--gray);
-    padding: 4px 2px;
+    padding: 2px 1px;
     transition: color 0.2s;
     text-transform: uppercase;
   }
@@ -523,12 +530,24 @@
   <!-- NAV -->
   <nav id="main-nav">
     <span class="nav-logo" onclick="goHome()">STEVENSON</span>
-    <div class="nav-filters">
-      <button class="active" data-filter="all">ALL</button>
-      <button data-filter="under50">UNDER $50</button>
-      <button data-filter="50to200">$50 - $200</button>
-      <button data-filter="200to1000">$200 - $1K</button>
-      <button data-filter="over1000">$1K+</button>
+    <div class="nav-center">
+      <div class="nav-filters" id="region-filters">
+        <button class="active" data-region="all">ALL</button>
+        <button data-region="losangeles">LA</button>
+        <button data-region="sfbay">SF BAY</button>
+        <button data-region="sandiego">SD</button>
+        <button data-region="sacramento">SAC</button>
+        <button data-region="orangecounty">OC</button>
+        <button data-region="inlandempire">IE</button>
+        <button data-region="santabarbara">SB</button>
+      </div>
+      <div class="nav-filters" id="price-filters">
+        <button class="active" data-price="all">ALL PRICES</button>
+        <button data-price="under50">UNDER $50</button>
+        <button data-price="50to200">$50 - $200</button>
+        <button data-price="200to1000">$200 - $1K</button>
+        <button data-price="over1000">$1K+</button>
+      </div>
     </div>
     <span class="nav-count" id="nav-count"></span>
   </nav>
@@ -581,26 +600,17 @@
   let filtered = [];
   let currentIndex = -1;
   let currentImageIndex = 0;
-  let currentFilter = 'all';
+  let currentRegion = 'all';
+  let currentPrice = 'all';
 
   // Load paintings
   fetch('paintings.json')
     .then(r => r.json())
     .then(data => {
-      // Filter to only paintings with images
       paintings = data.filter(p => p.images && p.images.length > 0);
       filtered = [...paintings];
       renderGrid();
     });
-
-  // Generate short code from title
-  function makeCode(title) {
-    const words = title.replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/);
-    if (words.length >= 2) {
-      return (words[0].substring(0, 2) + '-' + String(words.length).padStart(2, '0')).toUpperCase();
-    }
-    return title.substring(0, 5).toUpperCase();
-  }
 
   // Shorten title for grid
   function shortTitle(title) {
@@ -609,36 +619,43 @@
     return clean;
   }
 
-  // Filter logic
-  function applyFilter(filter) {
-    currentFilter = filter;
-    document.querySelectorAll('.nav-filters button').forEach(b => {
-      b.classList.toggle('active', b.dataset.filter === filter);
+  // Apply both region + price filters
+  function applyFilters() {
+    filtered = paintings.filter(p => {
+      // Region filter
+      if (currentRegion !== 'all' && p.region !== currentRegion) return false;
+      // Price filter
+      switch (currentPrice) {
+        case 'under50': return p.price !== null && p.price < 50;
+        case '50to200': return p.price !== null && p.price >= 50 && p.price <= 200;
+        case '200to1000': return p.price !== null && p.price > 200 && p.price <= 1000;
+        case 'over1000': return p.price !== null && p.price > 1000;
+        default: return true;
+      }
     });
-
-    switch (filter) {
-      case 'under50':
-        filtered = paintings.filter(p => p.price !== null && p.price < 50);
-        break;
-      case '50to200':
-        filtered = paintings.filter(p => p.price !== null && p.price >= 50 && p.price <= 200);
-        break;
-      case '200to1000':
-        filtered = paintings.filter(p => p.price !== null && p.price > 200 && p.price <= 1000);
-        break;
-      case 'over1000':
-        filtered = paintings.filter(p => p.price !== null && p.price > 1000);
-        break;
-      default:
-        filtered = [...paintings];
-    }
-
     renderGrid();
   }
 
-  // Nav filter click handlers
-  document.querySelectorAll('.nav-filters button').forEach(btn => {
-    btn.addEventListener('click', () => applyFilter(btn.dataset.filter));
+  // Region filter click handlers
+  document.querySelectorAll('#region-filters button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRegion = btn.dataset.region;
+      document.querySelectorAll('#region-filters button').forEach(b => {
+        b.classList.toggle('active', b.dataset.region === currentRegion);
+      });
+      applyFilters();
+    });
+  });
+
+  // Price filter click handlers
+  document.querySelectorAll('#price-filters button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentPrice = btn.dataset.price;
+      document.querySelectorAll('#price-filters button').forEach(b => {
+        b.classList.toggle('active', b.dataset.price === currentPrice);
+      });
+      applyFilters();
+    });
   });
 
   // Render grid
@@ -784,7 +801,15 @@
   // Go home
   function goHome() {
     closeDetail();
-    applyFilter('all');
+    currentRegion = 'all';
+    currentPrice = 'all';
+    document.querySelectorAll('#region-filters button').forEach(b => {
+      b.classList.toggle('active', b.dataset.region === 'all');
+    });
+    document.querySelectorAll('#price-filters button').forEach(b => {
+      b.classList.toggle('active', b.dataset.price === 'all');
+    });
+    applyFilters();
     document.getElementById('grid-view').scrollTop = 0;
   }
 
