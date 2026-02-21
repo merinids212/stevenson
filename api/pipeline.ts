@@ -26,13 +26,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const clScored = await redis.zcount('stv:idx:source:cl', 0.1, '+inf')
   const ebScored = await redis.zcount('stv:idx:source:eb', 0.1, '+inf')
 
+  // Use live ZCOUNT for scored (stv:stats only updates at end of full run)
+  const liveScored = clScored + ebScored
+  const totalListings = totalIndexed || parseInt(raw.total_listings) || 0
+
   const pipeline = {
-    total_listings: parseInt(raw.total_listings) || 0,
-    scored_count: parseInt(raw.scored_count) || 0,
-    unscored_count: (parseInt(raw.total_listings) || 0) - (parseInt(raw.scored_count) || 0),
-    score_pct: parseInt(raw.total_listings) > 0
-      ? Math.round((parseInt(raw.scored_count) || 0) / parseInt(raw.total_listings) * 100)
-      : 0,
+    total_listings: totalListings,
+    scored_count: liveScored,
+    unscored_count: totalListings - liveScored,
+    score_pct: totalListings > 0 ? Math.round(liveScored / totalListings * 100) : 0,
     sources: {
       craigslist: { total: clCount, scored: clScored, unscored: clCount - clScored },
       ebay: { total: ebCount, scored: ebScored, unscored: ebCount - ebScored },
