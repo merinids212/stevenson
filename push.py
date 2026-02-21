@@ -107,9 +107,19 @@ def push_paintings(paintings: list[dict], r):
     return pushed, skipped
 
 
+def _median(vals):
+    """Compute true median (average of two middle values for even-length lists)."""
+    if not vals:
+        return 0
+    n = len(vals)
+    if n % 2 == 1:
+        return vals[n // 2]
+    return (vals[n // 2 - 1] + vals[n // 2]) / 2
+
+
 def push_stats(paintings: list[dict], r):
     """Recompute and push stv:stats from a list of paintings."""
-    prices = sorted(p["price"] for p in paintings if p.get("price") is not None)
+    prices = sorted(p["price"] for p in paintings if p.get("price") is not None and p["price"] > 0)
     scored = [p for p in paintings if p.get("art_score") is not None]
     art_scores = sorted(p["art_score"] for p in scored)
     regions = {p.get("region", "") for p in paintings} - {""}
@@ -124,12 +134,12 @@ def push_stats(paintings: list[dict], r):
         "states": str(len(states)),
         "price_min": str(min(prices)) if prices else "0",
         "price_max": str(max(prices)) if prices else "0",
-        "price_median": str(prices[len(prices) // 2]) if prices else "0",
+        "price_median": str(_median(prices)),
         "scored_count": str(len(scored)),
         "artists_count": str(len(artists)),
         "top_rated_count": str(len(top_rated)),
         "gems_count": str(len(gems)),
-        "median_art_score": str(art_scores[len(art_scores) // 2]) if art_scores else "0",
+        "median_art_score": str(_median(art_scores)),
     }
 
     r.hset("stv:stats", mapping=stats)
