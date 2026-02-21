@@ -74,12 +74,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const total = paintings.length
 
+  // Weighted shuffle: skew toward high scores but mix in variety
+  // Each painting gets a random key weighted by its rank position
+  // Top paintings are very likely to stay near the top, but not locked in
+  if (sort === 'art_score' && order === 'desc' && !region && !state && !source) {
+    paintings = paintings.map((p, i) => ({
+      painting: p,
+      key: Math.random() * Math.pow(0.998, i),
+    }))
+    .sort((a, b) => b.key - a.key)
+    .map(w => w.painting)
+  }
+
   // Paginate if limit > 0
   if (limit > 0) {
     const start = (page - 1) * limit
     paintings = paintings.slice(start, start + limit)
   }
 
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')
+  res.setHeader('Cache-Control', 'no-cache')
   return res.json({ paintings, total })
 }
