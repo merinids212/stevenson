@@ -37,10 +37,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     indexKey = 'stv:idx:art_score'
   }
 
-  // Get sorted IDs from the index
+  // Get sorted IDs from the index (cap at 3000 for performance)
+  const maxFetch = 3000
   const ids = order === 'asc'
-    ? await redis.zrange(indexKey, 0, -1)
-    : await redis.zrevrange(indexKey, 0, -1)
+    ? await redis.zrange(indexKey, 0, maxFetch - 1)
+    : await redis.zrevrange(indexKey, 0, maxFetch - 1)
 
   if (!ids.length) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')

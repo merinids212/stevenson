@@ -298,12 +298,18 @@
     padding: 20px 60px;
   }
 
+  .detail-image-area {
+    background: #f5f5f5;
+  }
   .detail-image-area img {
     max-width: 100%;
     max-height: 65vh;
     object-fit: contain;
     will-change: transform;
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
+  .detail-image-area img.loaded { opacity: 1; }
 
   .detail-image-area img.switching {
     opacity: 0;
@@ -455,6 +461,78 @@
   .detail-extra.open {
     max-height: 200px;
     opacity: 1;
+  }
+
+  /* ─── DESKTOP: floating card instead of full-screen ─── */
+  @media (min-width: 768px) {
+    #detail-view {
+      top: auto;
+      left: auto;
+      right: 24px;
+      bottom: 24px;
+      width: 480px;
+      height: auto;
+      max-height: 320px;
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08);
+      flex-direction: row;
+      overflow: hidden;
+      transform: translateY(20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #detail-view.active {
+      transform: translateY(0);
+    }
+    .detail-nav {
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: auto;
+      width: auto;
+      height: auto;
+      padding: 8px 10px;
+      background: transparent;
+      z-index: 5;
+      gap: 2px;
+    }
+    .detail-nav button { font-size: 16px; padding: 4px; }
+    .detail-content {
+      flex-direction: row;
+      padding-top: 0;
+      overflow: hidden;
+    }
+    .detail-image-area {
+      min-height: 0;
+      width: 200px;
+      min-width: 200px;
+      padding: 0;
+      flex: none;
+    }
+    .detail-image-area img {
+      max-height: 320px;
+      width: 200px;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px 0 0 12px;
+    }
+    .arrow { display: none; }
+    .dots { display: none; }
+    .detail-info {
+      padding: 40px 16px 16px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      overflow-y: auto;
+      flex: 1;
+      min-width: 0;
+    }
+    .detail-title { font-size: 12px; }
+    .detail-price { font-size: 13px; }
+    .detail-link { padding: 6px 16px; font-size: 11px; }
+    .expand-btn { display: none; }
+    .detail-extra { display: block; }
+    .neighbor-nav { display: none; }
   }
 
   /* ─── NEIGHBOR NAV ─── */
@@ -897,8 +975,10 @@
     document.getElementById('expand-btn').classList.remove('open');
     document.getElementById('detail-extra').classList.remove('open');
 
-    // Set image
+    // Set image with load transition
     const img = document.getElementById('detail-img');
+    img.classList.remove('loaded');
+    img.onload = () => img.classList.add('loaded');
     img.src = painting.images[0];
     img.alt = painting.title;
 
@@ -913,6 +993,8 @@
   }
 
   // ─── FLIP OPEN ───
+  const isDesktop = () => window.innerWidth >= 768;
+
   function openDetail(index, clickedEl) {
     clearFlipTimeouts();
     populateDetail(index);
@@ -928,6 +1010,14 @@
     detailNav.style.cssText = '';
     detailInfo.style.cssText = '';
 
+    // Desktop: floating card, no grid dimming
+    if (isDesktop()) {
+      // If already open, just swap content (already populated above)
+      if (detail.classList.contains('active')) return;
+      detail.classList.add('active');
+      return;
+    }
+
     // Get thumbnail rect
     let thumbRect = null;
     if (clickedEl) {
@@ -935,7 +1025,7 @@
       if (img) thumbRect = img.getBoundingClientRect();
     }
 
-    // Dim grid
+    // Dim grid (mobile only)
     document.getElementById('grid-view').classList.add('dimmed');
     document.getElementById('main-nav').classList.add('stv-nav--hidden');
     document.getElementById('price-filters').classList.add('stv-nav--hidden');
@@ -1033,6 +1123,14 @@
     const detailNav = detail.querySelector('.detail-nav');
     const detailInfo = detail.querySelector('.detail-info');
 
+    // Desktop: simple dismiss
+    if (isDesktop()) {
+      detail.classList.remove('active');
+      detail.style.cssText = '';
+      detailImg.style.cssText = '';
+      return;
+    }
+
     // Find target grid item to fly back to
     let targetRect = null;
     const gridItems = document.querySelectorAll('.grid-item');
@@ -1044,7 +1142,7 @@
       }
     }
 
-    // Undim grid
+    // Undim grid (mobile)
     document.getElementById('grid-view').classList.remove('dimmed');
     document.getElementById('main-nav').classList.remove('stv-nav--hidden');
     document.getElementById('price-filters').classList.remove('stv-nav--hidden');
@@ -1128,9 +1226,10 @@
     const img = document.getElementById('detail-img');
 
     img.classList.add('switching');
+    img.classList.remove('loaded');
     setTimeout(() => {
+      img.onload = () => { img.classList.add('loaded'); img.classList.remove('switching'); };
       img.src = painting.images[index];
-      img.classList.remove('switching');
     }, 200);
 
     document.querySelectorAll('.dot').forEach((d, i) => {
