@@ -662,6 +662,77 @@
     letter-spacing: 0.05em;
   }
 
+  /* ─── LIKE BUTTON (grid) ─── */
+  .grid-item-like {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(255, 255, 255, 0.85);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.15s var(--ease);
+    z-index: 2;
+    color: var(--gray);
+    line-height: 1;
+  }
+
+  .grid-item:hover .grid-item-like,
+  .grid-item-like.liked {
+    opacity: 1;
+  }
+
+  .grid-item-like.liked {
+    color: #c0392b;
+  }
+
+  .grid-item-like:hover {
+    transform: scale(1.15);
+  }
+
+  .grid-item-like:active {
+    transform: scale(0.9);
+  }
+
+  /* ─── LIKE BUTTON (detail) ─── */
+  #like-btn {
+    transition: transform 0.2s var(--ease-spring);
+  }
+
+  #like-btn.liked {
+    color: #c0392b !important;
+  }
+
+  #like-btn:active {
+    transform: scale(0.85);
+  }
+
+  @keyframes heartPop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.35); }
+    100% { transform: scale(1); }
+  }
+
+  #like-btn.pop {
+    animation: heartPop 0.35s var(--ease-spring);
+  }
+
+  /* ─── FOR YOU BADGE ─── */
+  .nav-filters button[data-price="foryou"] {
+    color: #c0392b;
+  }
+
+  .nav-filters button[data-price="foryou"].active {
+    color: #c0392b;
+  }
+
   /* ─── STAGGERED ENTRANCE ─── */
   .grid-item {
     opacity: 0;
@@ -708,6 +779,7 @@
       <button data-price="over1000">$1K+</button>
       <button data-price="best">BEST</button>
       <button data-price="gems">GEMS</button>
+      <button data-price="foryou" style="display:none;">FOR YOU</button>
     </div>
     <span class="nav-count" id="nav-count"></span>
   </nav>
@@ -727,7 +799,10 @@
   <div id="detail-view">
     <div class="detail-nav">
       <button onclick="closeDetail()" aria-label="Back">&#8249;</button>
-      <button id="share-btn" onclick="copyPermalink()" aria-label="Copy link" style="font-size:14px;" title="Copy link">&#8599;</button>
+      <div style="display:flex;gap:4px;">
+        <button id="like-btn" onclick="toggleLike()" aria-label="Like" style="font-size:18px;" title="Like">&#9825;</button>
+        <button id="share-btn" onclick="copyPermalink()" aria-label="Copy link" style="font-size:14px;" title="Copy link">&#8599;</button>
+      </div>
     </div>
     <div class="detail-content">
       <div class="detail-image-area">
@@ -767,6 +842,9 @@
   let flipTimeouts = [];
   let displayedCount = 0;
   const PAGE_SIZE = 60;
+
+  // Likes state (shared via Redis)
+  let likedIds = new Set();
 
   function clearFlipTimeouts() {
     flipTimeouts.forEach(id => clearTimeout(id));
@@ -815,8 +893,13 @@
   function fetchPaintings() {
     if (fetchController) fetchController.abort();
     fetchController = new AbortController();
-    const url = buildApiUrl();
 
+    if (currentPrice === 'foryou') {
+      fetchRecommendations();
+      return;
+    }
+
+    const url = buildApiUrl();
     fetch(url, { signal: fetchController.signal })
       .then(r => r.json())
       .then(data => {
@@ -870,12 +953,14 @@
     const end = Math.min(displayedCount + PAGE_SIZE, filtered.length);
     for (let i = displayedCount; i < end; i++) {
       const painting = filtered[i];
+      const isLiked = likedIds.has(painting.id);
       const item = document.createElement('div');
       item.className = 'grid-item';
       item.style.animationDelay = `${Math.min((i - displayedCount) * 0.03, 1.2)}s`;
       item.onclick = () => openDetail(i, item);
 
       item.innerHTML = `
+        <button class="grid-item-like${isLiked ? ' liked' : ''}" onclick="toggleGridLike(event, '${painting.id}')">${isLiked ? '&#9829;' : '&#9825;'}</button>
         <div class="grid-item-img-wrap">
           <img src="${painting.images[0]}" alt="${painting.title}" loading="lazy">
         </div>
@@ -945,6 +1030,9 @@
     // Arrows
     document.querySelector('.arrow-left').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
     document.querySelector('.arrow-right').style.visibility = painting.images.length > 1 ? 'visible' : 'hidden';
+
+    // Like button
+    updateLikeButton();
   }
 
   // ─── FLIP OPEN ───
@@ -1300,8 +1388,118 @@
       if (e.key === 'ArrowRight') nextImage();
       if (e.key === 'ArrowUp') prevPainting();
       if (e.key === 'ArrowDown') nextPainting();
+      if (e.key === 'l' || e.key === 'L') toggleLike();
     }
   });
+
+  // ─── LIKES (shared via Redis) ───
+
+  function fetchLikes() {
+    fetch('/api/like')
+      .then(r => r.json())
+      .then(data => {
+        likedIds = new Set(data.liked || []);
+        updateForYouVisibility();
+      })
+      .catch(() => {});
+  }
+
+  function toggleLike() {
+    const painting = filtered[currentIndex];
+    if (!painting) return;
+
+    const isLiked = likedIds.has(painting.id);
+    const newState = !isLiked;
+
+    // Optimistic update
+    if (newState) {
+      likedIds.add(painting.id);
+    } else {
+      likedIds.delete(painting.id);
+    }
+    updateLikeButton();
+    updateForYouVisibility();
+
+    // Animate
+    const btn = document.getElementById('like-btn');
+    if (newState) {
+      btn.classList.remove('pop');
+      void btn.offsetWidth;
+      btn.classList.add('pop');
+    }
+
+    // Persist to Redis
+    fetch('/api/like', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: painting.id, liked: newState }),
+    }).catch(() => {
+      // Revert on failure
+      if (newState) likedIds.delete(painting.id);
+      else likedIds.add(painting.id);
+      updateLikeButton();
+    });
+  }
+
+  function toggleGridLike(e, paintingId) {
+    e.stopPropagation();
+    const isLiked = likedIds.has(paintingId);
+    const newState = !isLiked;
+
+    if (newState) likedIds.add(paintingId);
+    else likedIds.delete(paintingId);
+
+    // Update this grid heart
+    const btn = e.currentTarget;
+    btn.innerHTML = newState ? '&#9829;' : '&#9825;';
+    btn.classList.toggle('liked', newState);
+    updateForYouVisibility();
+
+    fetch('/api/like', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: paintingId, liked: newState }),
+    }).catch(() => {
+      if (newState) likedIds.delete(paintingId);
+      else likedIds.add(paintingId);
+      btn.innerHTML = !newState ? '&#9829;' : '&#9825;';
+      btn.classList.toggle('liked', !newState);
+    });
+  }
+
+  function updateLikeButton() {
+    const painting = filtered[currentIndex];
+    const btn = document.getElementById('like-btn');
+    if (!painting || !btn) return;
+    const isLiked = likedIds.has(painting.id);
+    btn.innerHTML = isLiked ? '&#9829;' : '&#9825;';
+    btn.classList.toggle('liked', isLiked);
+  }
+
+  function updateForYouVisibility() {
+    const btn = document.querySelector('[data-price="foryou"]');
+    if (btn) {
+      btn.style.display = likedIds.size > 0 ? '' : 'none';
+    }
+  }
+
+  function fetchRecommendations() {
+    fetch('/api/recommend', { signal: fetchController.signal })
+      .then(r => r.json())
+      .then(data => {
+        if (data.message) {
+          console.log('Recommendations:', data.message);
+        }
+        paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+        filtered = [...paintings];
+        document.getElementById('nav-count').textContent = filtered.length;
+        renderGrid();
+      })
+      .catch(e => { if (e.name !== 'AbortError') console.error(e); });
+  }
+
+  // Load likes on startup
+  fetchLikes();
 </script>
 
 </body>

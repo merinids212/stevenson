@@ -1,5 +1,21 @@
 import type { Painting } from './types'
 
+// Fields to fetch via HMGET (excludes embedding blob)
+export const PAINTING_FIELDS = [
+  'title', 'price', 'url', 'location', 'latitude', 'longitude',
+  'images', 'posted', 'region', 'state', 'quality_score',
+  'clip_styles', 'uniqueness', 'art_score', 'artist',
+  'artist_confidence', 'value_score', 'aesthetic_score',
+] as const
+
+export function hmgetToHash(values: (string | null)[]): Record<string, string> {
+  const hash: Record<string, string> = {}
+  PAINTING_FIELDS.forEach((field, i) => {
+    if (values[i] != null) hash[field] = values[i]!
+  })
+  return hash
+}
+
 function num(v: string | undefined): number | null {
   if (!v || v === 'null' || v === 'None') return null
   const n = parseFloat(v)

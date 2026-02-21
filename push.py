@@ -173,6 +173,41 @@ def push(file_path: str = "paintings.json", flush: bool = False):
     print("Done!")
 
 
+def get_redis_binary():
+    """Get a Redis client for binary operations (no decode_responses)."""
+    return redis.from_url(get_redis_url(), decode_responses=False)
+
+
+def ensure_vector_index(r_bin):
+    """Create RediSearch vector index for CLIP embeddings if it doesn't exist."""
+    try:
+        r_bin.execute_command(
+            "FT.CREATE", "stv:vec_idx",
+            "ON", "HASH",
+            "PREFIX", "1", "stv:p:",
+            "SCHEMA",
+            "embedding", "VECTOR", "HNSW", "6",
+            "TYPE", "FLOAT32", "DIM", "768", "DISTANCE_METRIC", "COSINE",
+        )
+        print("  Created vector search index stv:vec_idx")
+    except redis.ResponseError as e:
+        if "Index already exists" in str(e):
+            pass
+        else:
+            raise
+
+
+def push_embeddings(embeddings: dict, r_bin) -> int:
+    """Push CLIP embeddings to Redis hashes. embeddings = {painting_id: float32_bytes}."""
+    if not embeddings:
+        return 0
+    pipe = r_bin.pipeline()
+    for pid, emb_bytes in embeddings.items():
+        pipe.hset(f"stv:p:{pid}", "embedding", emb_bytes)
+    pipe.execute()
+    return len(embeddings)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Push paintings to Redis")
     parser.add_argument("--file", default="paintings.json", help="Path to paintings.json")

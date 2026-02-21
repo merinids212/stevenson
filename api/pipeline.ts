@@ -30,6 +30,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const liveScored = clScored + ebScored
   const totalListings = totalIndexed || parseInt(raw.total_listings) || 0
 
+  // Likes count
+  const likesCount = await redis.scard('stv:likes')
+
+  // Vector index status
+  let vecIndexReady = false
+  try {
+    await (redis as any).call('FT.INFO', 'stv:vec_idx')
+    vecIndexReady = true
+  } catch { /* index doesn't exist yet */ }
+
   const pipeline = {
     total_listings: totalListings,
     scored_count: liveScored,
@@ -52,6 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     price_min: parseFloat(raw.price_min) || 0,
     price_max: parseFloat(raw.price_max) || 0,
     price_median: parseFloat(raw.price_median) || 0,
+    likes_count: likesCount,
+    vec_index_ready: vecIndexReady,
   }
 
   res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=30')

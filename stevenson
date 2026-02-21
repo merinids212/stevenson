@@ -163,6 +163,23 @@ def cmd_score(args):
     return True
 
 
+def cmd_embed(args):
+    """Backfill CLIP embeddings for already-scored paintings."""
+    heading("Embedding paintings")
+
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print(red("  PyTorch not installed — requires torch + open_clip"))
+        print(dim("  pip install torch open_clip_torch pillow"))
+        return False
+
+    from scorer import embed_paintings
+
+    embed_paintings(chunk_size=args.chunk_size)
+    return True
+
+
 def cmd_push(args):
     """Push paintings.json to Redis."""
     heading("Pushing to Redis")
@@ -276,6 +293,7 @@ def cmd_status(args):
         from push import get_redis_url
         import redis as r
         client = r.from_url(get_redis_url(), decode_responses=True)
+        client_bin = r.from_url(get_redis_url(), decode_responses=False)
         client.ping()
         stats_raw = client.hgetall("stv:stats")
         if stats_raw:
@@ -288,6 +306,26 @@ def cmd_status(args):
             stat_line("Price range:",
                       f"${float(stats_raw.get('price_min', 0)):,.0f} – "
                       f"${float(stats_raw.get('price_max', 0)):,.0f}")
+
+            # Embeddings & likes
+            sample_ids = client.zrevrange("stv:idx:art_score", 0, 99)
+            if sample_ids:
+                emb_count = sum(
+                    1 for pid in sample_ids
+                    if client_bin.hexists(f"stv:p:{pid}".encode(), b"embedding")
+                )
+                stat_line("Embeddings:", f"{emb_count}/100 sampled"
+                          + (f" ({green('ready')})" if emb_count > 50 else f" ({yellow('run: stevenson embed')})"))
+
+            likes_count = client.scard("stv:likes")
+            stat_line("Likes:", f"{likes_count}")
+
+            # Vector index
+            try:
+                client_bin.execute_command("FT.INFO", "stv:vec_idx")
+                stat_line("Vector index:", green("active"))
+            except Exception:
+                stat_line("Vector index:", dim("not created"))
             print()
     except Exception:
         print(f"  {dim('Redis: not connected')}\n")
@@ -388,6 +426,7 @@ def main():
 commands:
   pull      Scrape new paintings from eBay / Craigslist
   score     Run CLIP aesthetic scorer on paintings.json
+  embed     Backfill CLIP embeddings for recommendations
   push      Push paintings.json to Redis
   update    Full pipeline: pull → export → score → push
   export    Merge data stores into paintings.json
@@ -453,6 +492,11 @@ commands:
     p_update.add_argument("--chunk-size", type=int, default=200,
                           help="Paintings per scoring chunk (default: 200)")
 
+    # embed
+    p_embed = sub.add_parser("embed", help="Backfill CLIP embeddings for recommendations")
+    p_embed.add_argument("--chunk-size", type=int, default=200,
+                         help="Paintings per chunk (default: 200)")
+
     # ingest
     p_ingest = sub.add_parser("ingest", help="Import JSON file into a store")
     p_ingest.add_argument("file", help="Path to JSON file")
@@ -472,6 +516,7 @@ commands:
         "pull": cmd_pull,
         "export": cmd_export,
         "score": cmd_score,
+        "embed": cmd_embed,
         "push": cmd_push,
         "update": cmd_update,
         "status": cmd_status,

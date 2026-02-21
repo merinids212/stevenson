@@ -438,9 +438,17 @@ def score_chunk(paintings, clip_model, preprocess, tokenizer, aesthetic_model, d
         valid_indices.extend(batch_indices)
 
     if not all_features:
-        return []
+        return [], {}
 
     image_features = torch.cat(all_features, dim=0)
+
+    # Save CLIP embeddings as bytes for vector search
+    embeddings = {}
+    feat_np = image_features.cpu().numpy()
+    for j, idx in enumerate(valid_indices):
+        pid = paintings[idx].get("id", "")
+        if pid:
+            embeddings[pid] = feat_np[j].astype(np.float32).tobytes()
 
     # LAION aesthetic scoring with fixed calibration
     aesthetic_raw = aesthetic_model(image_features).squeeze(-1).cpu().numpy()
@@ -488,7 +496,7 @@ def score_chunk(paintings, clip_model, preprocess, tokenizer, aesthetic_model, d
 
         scored.append(p)
 
-    return scored
+    return scored, embeddings
 
 
 # ─── MAIN PIPELINE ───
@@ -527,16 +535,21 @@ def score_paintings(
 
     # Connect to Redis (unless --no-push)
     redis_client = None
+    redis_binary = None
     if not no_push:
         try:
             import redis
-            from push import get_redis_url
+            from push import get_redis_url, get_redis_binary, ensure_vector_index
             redis_client = redis.from_url(get_redis_url(), decode_responses=True)
             redis_client.ping()
             print("Connected to Redis")
+            # Binary client for embedding push
+            redis_binary = get_redis_binary()
+            ensure_vector_index(redis_binary)
         except Exception as e:
             print(f"Warning: Redis unavailable ({e}), scoring without push")
             redis_client = None
+            redis_binary = None
 
     # Process in chunks
     THUMB_DIR.mkdir(exist_ok=True)
@@ -555,7 +568,7 @@ def score_paintings(
 
         # Score the chunk
         chunk_dir = THUMB_DIR / f"chunk_{chunk_idx}"
-        scored = score_chunk(
+        scored, embeddings = score_chunk(
             chunk_paintings, clip_model, preprocess, tokenizer,
             aesthetic_model, device, chunk_dir,
         )
@@ -569,11 +582,14 @@ def score_paintings(
 
         # Push to Redis
         if redis_client:
-            from push import push_paintings
+            from push import push_paintings, push_embeddings
             pushed, skipped = push_paintings(scored, redis_client)
             total_pushed += pushed
-            print(f"  Scored {len(scored)} — pushed {pushed} to Redis "
-                  f"({total_scored}/{len(items)} total)")
+            emb_count = 0
+            if redis_binary and embeddings:
+                emb_count = push_embeddings(embeddings, redis_binary)
+            print(f"  Scored {len(scored)} — pushed {pushed} to Redis, "
+                  f"{emb_count} embeddings ({total_scored}/{len(items)} total)")
         else:
             print(f"  Scored {len(scored)} ({total_scored}/{len(items)} total)")
 
@@ -621,6 +637,127 @@ def score_paintings(
             print(f"    {p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:55]}")
 
 
+@torch.no_grad()
+def embed_chunk(paintings, clip_model, preprocess, device, chunk_dir):
+    """Compute CLIP embeddings only (no scoring). Returns {painting_id: bytes}."""
+    image_map = download_chunk_images(paintings, chunk_dir)
+
+    all_features = []
+    valid_pids = []
+    batch_images = []
+    batch_pids = []
+    batch_size = 16
+
+    for p in paintings:
+        pid = p.get("id", "")
+        if pid not in image_map:
+            continue
+        try:
+            img = Image.open(image_map[pid]).convert("RGB")
+            tensor = preprocess(img)
+            batch_images.append(tensor)
+            batch_pids.append(pid)
+        except Exception:
+            continue
+
+        if len(batch_images) >= batch_size:
+            batch_tensor = torch.stack(batch_images).to(device)
+            feats = clip_model.encode_image(batch_tensor)
+            feats /= feats.norm(dim=-1, keepdim=True)
+            all_features.append(feats)
+            valid_pids.extend(batch_pids)
+            batch_images = []
+            batch_pids = []
+
+    if batch_images:
+        batch_tensor = torch.stack(batch_images).to(device)
+        feats = clip_model.encode_image(batch_tensor)
+        feats /= feats.norm(dim=-1, keepdim=True)
+        all_features.append(feats)
+        valid_pids.extend(batch_pids)
+
+    if not all_features:
+        return {}
+
+    all_feats = torch.cat(all_features, dim=0).cpu().numpy()
+    return {
+        pid: all_feats[j].astype(np.float32).tobytes()
+        for j, pid in enumerate(valid_pids)
+    }
+
+
+def embed_paintings(chunk_size=200):
+    """Backfill CLIP embeddings for already-scored paintings."""
+    stores = load_all_stores()
+    if not stores:
+        print("No data stores found")
+        return
+
+    # Collect scored paintings
+    items = []
+    for source, store in stores.items():
+        for pid, p in store["listings"].items():
+            if not p.get("images") or p.get("art_score") is None:
+                continue
+            items.append((source, pid, p))
+
+    if not items:
+        print("No scored paintings to embed")
+        return
+
+    print(f"Found {len(items)} scored paintings")
+
+    # Check which already have embeddings in Redis
+    from push import get_redis_binary, ensure_vector_index, push_embeddings
+    r_bin = get_redis_binary()
+
+    print("Checking for existing embeddings...")
+    pipe = r_bin.pipeline()
+    for _, pid, _ in items:
+        pipe.hexists(f"stv:p:{pid}", "embedding")
+    results = pipe.execute()
+
+    need_embedding = [(s, pid, p) for (s, pid, p), has in zip(items, results) if not has]
+    print(f"  {len(need_embedding)} need embeddings "
+          f"({len(items) - len(need_embedding)} already have)")
+
+    if not need_embedding:
+        print("All embeddings up to date")
+        return
+
+    ensure_vector_index(r_bin)
+
+    # Load CLIP model only (no aesthetic model needed)
+    print("\nLoading CLIP model...")
+    clip_model, preprocess, _, device = load_clip()
+
+    THUMB_DIR.mkdir(exist_ok=True)
+    total_pushed = 0
+    num_chunks = math.ceil(len(need_embedding) / chunk_size)
+
+    for chunk_idx in range(num_chunks):
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, len(need_embedding))
+        chunk_items = need_embedding[start:end]
+        chunk_paintings = [p for _, _, p in chunk_items]
+
+        print(f"\n--- Chunk {chunk_idx + 1}/{num_chunks} "
+              f"({len(chunk_paintings)} paintings) ---")
+
+        chunk_dir = THUMB_DIR / f"emb_{chunk_idx}"
+        embeddings = embed_chunk(
+            chunk_paintings, clip_model, preprocess, device, chunk_dir,
+        )
+
+        if embeddings:
+            count = push_embeddings(embeddings, r_bin)
+            total_pushed += count
+            print(f"  Pushed {count} embeddings "
+                  f"({total_pushed}/{len(need_embedding)} total)")
+
+    print(f"\nDone! Pushed {total_pushed} embeddings to Redis")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Streaming CLIP painting scorer")
     parser.add_argument("--limit", type=int, default=None,
@@ -631,14 +768,19 @@ def main():
                         help="Paintings per chunk (default: 200)")
     parser.add_argument("--no-push", action="store_true",
                         help="Score without pushing to Redis")
+    parser.add_argument("--embed-only", action="store_true",
+                        help="Backfill CLIP embeddings for already-scored paintings")
     args = parser.parse_args()
 
-    score_paintings(
-        limit=args.limit,
-        rescore=args.rescore,
-        chunk_size=args.chunk_size,
-        no_push=args.no_push,
-    )
+    if args.embed_only:
+        embed_paintings(chunk_size=args.chunk_size)
+    else:
+        score_paintings(
+            limit=args.limit,
+            rescore=args.rescore,
+            chunk_size=args.chunk_size,
+            no_push=args.no_push,
+        )
 
 
 if __name__ == "__main__":

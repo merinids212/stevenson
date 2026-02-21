@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getRedis } from './_lib/redis'
-import { parsePainting } from './_lib/parse'
+import { parsePainting, PAINTING_FIELDS, hmgetToHash } from './_lib/parse'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -47,18 +47,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ paintings: [], total: 0 })
   }
 
-  // Fetch all painting hashes via pipeline
+  // Fetch painting fields via pipeline (excludes embedding blob)
   const pipe = redis.pipeline()
   for (const id of ids) {
-    pipe.hgetall(`stv:p:${id}`)
+    pipe.hmget(`stv:p:${id}`, ...PAINTING_FIELDS)
   }
   const results = await pipe.exec()
 
   // Parse and filter
   let paintings = (results || [])
     .map(([err, data], i) => {
-      if (err || !data || typeof data !== 'object' || !Object.keys(data as object).length) return null
-      return parsePainting(data as Record<string, string>, ids[i])
+      if (err || !data || !Array.isArray(data)) return null
+      const hash = hmgetToHash(data as (string | null)[])
+      if (!Object.keys(hash).length) return null
+      return parsePainting(hash, ids[i])
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .filter(p => p.images.length > 0)
