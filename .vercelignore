@@ -1,0 +1,12 @@
+thumbs/
+data/
+*.pyc
+__pycache__/
+sac+logos+ava1-l14-linearMSE.pth
+paintings.json
+paintings.csv
+scrapers/
+scorer.py
+scraper.py
+push.py
+stevenson
