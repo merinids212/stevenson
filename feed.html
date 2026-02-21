@@ -280,7 +280,7 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
 // ─── State ───
 let paintings = []       // all loaded paintings
 let likedSet = new Set() // server-side liked IDs
-let seenIds = new Set()  // IDs we've been served (for exclusion)
+let seenIds = loadSeen() // IDs we've been served — persisted in localStorage
 let currentIndex = 0
 let isFetching = false
 let fetchQueue = null     // debounced taste re-fetch after like
@@ -289,6 +289,21 @@ let pendingFetch = false  // queue fetch when one is in progress
 const BUFFER_AHEAD = 5   // pre-fetch when this many cards left
 const FETCH_SIZE = 15     // cards per fetch
 const INITIAL_SIZE = 20   // first load
+const MAX_SEEN = 200      // persist last N seen IDs across sessions
+
+function loadSeen() {
+  try {
+    const raw = localStorage.getItem('stv:feed:seen')
+    if (raw) return new Set(JSON.parse(raw))
+  } catch {}
+  return new Set()
+}
+function saveSeen() {
+  try {
+    const arr = Array.from(seenIds).slice(-MAX_SEEN)
+    localStorage.setItem('stv:feed:seen', JSON.stringify(arr))
+  } catch {}
+}
 
 // ─── Init ───
 async function init() {
@@ -307,7 +322,7 @@ async function fetchBatch(size) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        seen: Array.from(seenIds).slice(-300),
+        seen: Array.from(seenIds),
         size,
       }),
     })
@@ -325,15 +340,15 @@ async function fetchBatch(size) {
       return
     }
 
-    // Add to state
+    // Add to state + persist
     for (const p of newPaintings) {
       seenIds.add(p.id)
     }
-    // Cap seenIds to prevent unbounded memory growth
-    if (seenIds.size > 500) {
-      const recent = Array.from(seenIds).slice(-300)
-      seenIds = new Set(recent)
+    // Cap seenIds to prevent unbounded growth
+    if (seenIds.size > MAX_SEEN * 2) {
+      seenIds = new Set(Array.from(seenIds).slice(-MAX_SEEN))
     }
+    saveSeen()
 
     const startIdx = paintings.length
     paintings.push(...newPaintings)
@@ -544,16 +559,12 @@ async function toggleLike(idx) {
     return
   }
 
-  // Schedule taste re-fetch: debounced 600ms after last like
-  // This ensures the NEXT batch reflects updated taste
+  // Schedule taste re-fetch: debounced 500ms after last like
+  // Always re-fetch so next batch reflects updated taste immediately
   clearTimeout(fetchQueue)
   fetchQueue = setTimeout(() => {
-    // Only fetch if we're getting close to the end
-    const remaining = paintings.length - currentIndex - 1
-    if (remaining <= BUFFER_AHEAD + 5) {
-      fetchBatch(FETCH_SIZE)
-    }
-  }, 600)
+    fetchBatch(FETCH_SIZE)
+  }, 500)
 }
 
 function updateCardLike(id, liked) {

@@ -653,7 +653,6 @@
     <button data-price="50to200">$50–200</button>
     <button data-price="200to1000">$200–1K</button>
     <button data-price="over1000">$1K+</button>
-    <button data-price="gems">GEMS</button>
     <button data-price="foryou" style="display:none;">FOR YOU</button>
   </div>
 
@@ -677,7 +676,8 @@
       <button onclick="closeDetail()" aria-label="Back">&#8249;</button>
       <div style="display:flex;gap:4px;">
         <button id="like-btn" onclick="toggleLike()" aria-label="Like" style="font-size:18px;" title="Like">&#9825;</button>
-        <button id="share-btn" onclick="copyPermalink()" aria-label="Copy link" style="font-size:14px;" title="Copy link">&#8599;</button>
+        <button id="copy-btn" onclick="copyPermalink()" aria-label="Copy link" style="font-size:13px;opacity:0.5;" title="Copy link">&#128279;</button>
+        <button id="share-btn" onclick="openListing()" aria-label="View listing" style="font-size:14px;" title="View listing">&#8599;</button>
       </div>
     </div>
     <div class="detail-content">
@@ -759,7 +759,6 @@
     else if (currentPrice === '50to200') { params.push('min_price=50', 'max_price=200'); }
     else if (currentPrice === '200to1000') { params.push('min_price=200', 'max_price=1000'); }
     else if (currentPrice === 'over1000') { params.push('min_price=1000'); }
-    else if (currentPrice === 'gems') { params.push('filter=gems', 'sort=value_score'); }
     return url + params.join('&');
   }
 
@@ -1183,6 +1182,13 @@
     document.getElementById('grid-view').scrollTop = 0;
   }
 
+  // Open original listing
+  function openListing() {
+    const painting = filtered[currentIndex];
+    if (!painting || !painting.url) return;
+    window.open(painting.url, '_blank', 'noopener');
+  }
+
   // Copy permalink
   function copyPermalink() {
     const painting = filtered[currentIndex];
@@ -1190,9 +1196,9 @@
     const id = getPaintingId(painting);
     const url = window.location.origin + window.location.pathname + '#' + id;
     navigator.clipboard.writeText(url).then(() => {
-      const btn = document.getElementById('share-btn');
+      const btn = document.getElementById('copy-btn');
       btn.textContent = '\u2713';
-      setTimeout(() => { btn.innerHTML = '&#8599;'; }, 1200);
+      setTimeout(() => { btn.innerHTML = '&#128279;'; }, 1200);
     });
   }
 

@@ -139,7 +139,7 @@ async function getSimpleTaste(redis: any, likedIds: string[], excludeSet: Set<st
   const taste = averageVectors(embeddings.map(e => e.vec))
   const tasteBuffer = Buffer.from(taste.buffer)
 
-  const candidates = await knnQuery(redis, tasteBuffer, 80, excludeSet)
+  const candidates = await knnQuery(redis, tasteBuffer, 120, excludeSet)
   return {
     candidates: candidates.map(id => ({ id, reason: 'taste' as const })),
     styleAffinity,
@@ -166,7 +166,7 @@ async function getPoleTaste(redis: any, likedIds: string[], excludeSet: Set<stri
 
   for (const poleIdx of poleIndices) {
     const poleBuffer = Buffer.from(embeddings[poleIdx].vec.buffer)
-    const results = await knnQuery(redis, poleBuffer, 60, excludeSet, seenInTaste)
+    const results = await knnQuery(redis, poleBuffer, 80, excludeSet, seenInTaste)
     for (const id of results) seenInTaste.add(id)
     poleResults.push(results)
   }
@@ -349,13 +349,14 @@ async function knnQuery(
 // ─── Quality + explore candidates ───
 
 async function getQualityCandidates(redis: any, excludeSet: Set<string>, size: number): Promise<FeedItem[]> {
-  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 499)
+  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 2999)
   const filtered = topIds.filter((id: string) => !excludeSet.has(id))
 
   // Weighted random sampling: higher-ranked paintings are more likely but not guaranteed
+  // Gentler decay (0.995) over wider pool = much more variety
   const weighted = filtered.map((id: string, i: number) => ({
     id,
-    key: Math.random() * Math.pow(0.97, i),
+    key: Math.random() * Math.pow(0.995, i),
   }))
   weighted.sort((a, b) => b.key - a.key)
   return weighted.slice(0, size).map(w => ({ id: w.id, reason: 'quality' as const }))
@@ -365,8 +366,8 @@ async function getExploreCandidates(redis: any, excludeSet: Set<string>, size: n
   const totalPaintings: number = await redis.zcard('stv:idx:art_score')
   if (totalPaintings === 0) return []
 
-  const midStart = Math.floor(totalPaintings * 0.05)
-  const midEnd = Math.floor(totalPaintings * 0.80)
+  const midStart = Math.floor(totalPaintings * 0.02)
+  const midEnd = Math.floor(totalPaintings * 0.95)
   const midIds: string[] = await redis.zrevrange('stv:idx:art_score', midStart, midEnd)
   const available = midIds.filter(id => !excludeSet.has(id))
 
@@ -402,19 +403,19 @@ function interleave(taste: FeedItem[], quality: FeedItem[], explore: FeedItem[],
     const before = result.length
 
     if (hasTaste) {
-      // Pattern: T Q T T E
+      // Pattern: T T Q T E — taste-heavy, responsive to likes
+      while (ti < taste.length && !add(taste[ti])) ti++
+      if (ti < taste.length) ti++
       while (ti < taste.length && !add(taste[ti])) ti++
       if (ti < taste.length) ti++
       while (qi < quality.length && !add(quality[qi])) qi++
       if (qi < quality.length) qi++
-      while (ti < taste.length && !add(taste[ti])) ti++
-      if (ti < taste.length) ti++
       while (ti < taste.length && !add(taste[ti])) ti++
       if (ti < taste.length) ti++
       while (ei < explore.length && !add(explore[ei])) ei++
       if (ei < explore.length) ei++
     } else {
-      // Cold start: Q E Q E — more variety, less top-heavy
+      // Cold start: Q E Q E Q — discovery-heavy
       while (qi < quality.length && !add(quality[qi])) qi++
       if (qi < quality.length) qi++
       while (ei < explore.length && !add(explore[ei])) ei++
@@ -423,6 +424,8 @@ function interleave(taste: FeedItem[], quality: FeedItem[], explore: FeedItem[],
       if (qi < quality.length) qi++
       while (ei < explore.length && !add(explore[ei])) ei++
       if (ei < explore.length) ei++
+      while (qi < quality.length && !add(quality[qi])) qi++
+      if (qi < quality.length) qi++
     }
 
     if (result.length === before) break
