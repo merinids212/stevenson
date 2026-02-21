@@ -780,7 +780,7 @@
       .then(data => {
         paintings = data.paintings.filter(p => p.images && p.images.length > 0);
         filtered = [...paintings];
-        document.getElementById('nav-count').textContent = filtered.length;
+        document.getElementById('nav-count').textContent = filtered.length.toLocaleString() + ' Objects';
         renderGrid();
         if (window.location.hash) checkPermalink();
       })
@@ -818,7 +818,7 @@
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
     displayedCount = 0;
-    document.getElementById('nav-count').textContent = filtered.length;
+    document.getElementById('nav-count').textContent = filtered.length.toLocaleString() + ' Objects';
     renderMore();
     document.querySelector('.footer').classList.add('visible');
     document.getElementById('loading-spinner').classList.add('hidden');
@@ -1373,7 +1373,7 @@
         }
         paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
         filtered = [...paintings];
-        document.getElementById('nav-count').textContent = filtered.length;
+        document.getElementById('nav-count').textContent = filtered.length.toLocaleString() + ' Objects';
         renderGrid();
       })
       .catch(e => { if (e.name !== 'AbortError') console.error(e); });
