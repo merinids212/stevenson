@@ -99,7 +99,7 @@
   <h1>Stevenson</h1>
 
   <p>
-    An art discovery engine that continuously scrapes painting listings
+    An art discovery engine that continuously crawls painting listings
     from Craigslist and eBay across the United States, scores them with
     computer vision models, and serves a curated gallery — surfacing
     the most interesting work from the most unexpected places.
@@ -187,7 +187,7 @@
   <h2>Infrastructure</h2>
 
   <p>
-    Scrapers run on a schedule, collecting new listings and deduplicating
+    Crawlers run on a schedule, collecting new listings and deduplicating
     against existing data. Scoring runs on Apple Silicon using Metal
     Performance Shaders for GPU-accelerated inference. All painting data,
     scores, embeddings, and UMAP coordinates are stored in Redis with

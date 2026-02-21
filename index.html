@@ -491,6 +491,12 @@
     justify-content: center;
     gap: 20px;
     flex-wrap: wrap;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .footer.visible {
+    opacity: 1;
   }
 
   .footer a {
@@ -785,6 +791,7 @@
     displayedCount = 0;
     document.getElementById('nav-count').textContent = filtered.length;
     renderMore();
+    document.querySelector('.footer').classList.add('visible');
   }
 
   // Append next batch of items
