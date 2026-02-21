@@ -156,8 +156,8 @@
     .grid-item { padding: 4px 2px 6px; }
     .grid-item-title { font-size: 9px; margin-top: 4px; }
 
-    .detail-image-area { padding: 12px 40px; }
-    .detail-info { padding: 12px 16px 32px; }
+    .detail-image-area { padding: 16px 24px; }
+    .detail-info { padding: 16px 16px 28px; }
     .arrow { font-size: 22px; padding: 10px; }
     .arrow-left { left: 4px; }
     .arrow-right { right: 4px; }
@@ -257,26 +257,31 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 16px;
     z-index: 110;
-    background: var(--white);
+    background: transparent;
   }
 
   .detail-nav button {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 22px;
+    font-size: 20px;
     color: var(--black);
     padding: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: opacity 0.2s;
+    opacity: 0.35;
   }
 
   .detail-nav button:hover {
-    opacity: 0.5;
+    opacity: 1;
+  }
+
+  #like-btn, #like-btn.liked {
+    opacity: 1 !important;
   }
 
   /* ─── DETAIL CONTENT ─── */
@@ -284,6 +289,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     overflow-y: auto;
     padding-top: var(--nav-height);
   }
@@ -294,16 +301,14 @@
     align-items: center;
     justify-content: center;
     position: relative;
-    min-height: 50vh;
-    padding: 20px 60px;
+    min-height: 0;
+    width: 100%;
+    padding: 24px 100px;
   }
 
-  .detail-image-area {
-    background: #f5f5f5;
-  }
   .detail-image-area img {
     max-width: 100%;
-    max-height: 65vh;
+    max-height: 58vh;
     object-fit: contain;
     will-change: transform;
     opacity: 0;
@@ -324,24 +329,24 @@
     background: none;
     border: none;
     font-size: 28px;
-    color: var(--black);
+    color: var(--light-gray);
     cursor: pointer;
     padding: 16px;
-    transition: opacity 0.2s;
+    transition: color 0.2s;
     z-index: 5;
     user-select: none;
   }
 
-  .arrow:hover { opacity: 0.4; }
-  .arrow-left { left: 16px; }
-  .arrow-right { right: 16px; }
+  .arrow:hover { color: var(--black); }
+  .arrow-left { left: 24px; }
+  .arrow-right { right: 24px; }
 
   /* ─── DOT INDICATORS ─── */
   .dots {
     display: flex;
     justify-content: center;
     gap: 8px;
-    padding: 12px 0;
+    padding: 16px 0 0;
   }
 
   .dot {
@@ -360,40 +365,47 @@
   /* ─── DETAIL INFO ─── */
   .detail-info {
     text-align: center;
-    padding: 16px 20px 40px;
+    padding: 20px 20px 32px;
+    width: 100%;
   }
 
   .detail-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    margin-bottom: 4px;
+    margin-bottom: 10px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.5;
   }
 
   .detail-artist {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--gray);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
   }
 
   .detail-price {
     font-size: 14px;
     font-weight: 400;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .detail-location {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--gray);
     margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .detail-score {
-    display: inline-block;
-    font-size: 10px;
+    display: block;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--gray);
@@ -402,18 +414,18 @@
 
   .detail-value {
     display: block;
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--gray);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .detail-link {
     display: inline-block;
     font-family: var(--font);
-    font-size: 12px;
-    letter-spacing: 0.03em;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--black);
     border: 1px solid var(--black);
@@ -434,12 +446,12 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    margin: 0 auto 16px;
+    margin: 4px auto 0;
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 22px;
-    color: var(--gray);
+    font-size: 20px;
+    color: var(--light-gray);
     transition: color 0.2s, transform 0.3s var(--ease);
   }
 
@@ -459,7 +471,7 @@
   }
 
   .detail-extra.open {
-    max-height: 200px;
+    max-height: 260px;
     opacity: 1;
   }
 
@@ -488,10 +500,10 @@
     border: none;
     cursor: pointer;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--gray);
+    color: var(--light-gray);
     transition: color 0.2s;
   }
 
@@ -695,12 +707,12 @@
       <div class="dots" id="dots"></div>
       <div class="detail-info">
         <div class="detail-title" id="detail-title"></div>
-        <div class="detail-artist" id="detail-artist"></div>
         <div class="detail-price" id="detail-price"></div>
-        <div class="detail-score" id="detail-score"></div>
-        <div class="detail-value" id="detail-value"></div>
         <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+</button>
         <div class="detail-extra" id="detail-extra">
+          <div class="detail-artist" id="detail-artist"></div>
+          <div class="detail-score" id="detail-score"></div>
+          <div class="detail-value" id="detail-value"></div>
           <div class="detail-location" id="detail-location"></div>
           <a class="detail-link" id="detail-link" href="#" target="_blank" rel="noopener">VIEW LISTING</a>
         </div>
@@ -863,23 +875,16 @@
     const id = getPaintingId(painting);
     if (id) setHash(id);
 
-    document.getElementById('detail-title').textContent = painting.title;
+    // Title — clean and truncate for display
+    const cleanTitle = painting.title.replace(/free shipping!?/gi, '').replace(/[!]+/g, '').trim();
+    document.getElementById('detail-title').textContent = cleanTitle;
     document.getElementById('detail-price').textContent = painting.price
       ? `$${painting.price.toLocaleString()}`
       : 'INQUIRE';
     document.getElementById('detail-location').textContent = painting.location || '';
     document.getElementById('detail-link').href = painting.url || '#';
 
-    // Art score + style
-    const scoreEl = document.getElementById('detail-score');
-    if (painting.art_score != null) {
-      const topStyle = painting.clip_styles && painting.clip_styles[0] ? painting.clip_styles[0].style : '';
-      scoreEl.textContent = `Art Score: ${painting.art_score.toFixed(1)}${topStyle ? ' \u00b7 ' + topStyle : ''}`;
-    } else {
-      scoreEl.textContent = '';
-    }
-
-    // Artist
+    // Artist (now in expandable)
     const artistEl = document.getElementById('detail-artist');
     if (painting.artist) {
       artistEl.textContent = painting.artist;
@@ -889,10 +894,19 @@
       artistEl.style.display = 'none';
     }
 
-    // Value score
+    // Art score + style (now in expandable)
+    const scoreEl = document.getElementById('detail-score');
+    if (painting.art_score != null) {
+      const topStyle = painting.clip_styles && painting.clip_styles[0] ? painting.clip_styles[0].style : '';
+      scoreEl.textContent = `Score ${painting.art_score.toFixed(0)}${topStyle ? ' \u00b7 ' + topStyle : ''}`;
+    } else {
+      scoreEl.textContent = '';
+    }
+
+    // Value score (now in expandable)
     const valueEl = document.getElementById('detail-value');
     if (painting.value_score != null) {
-      valueEl.textContent = `Value: ${painting.value_score.toFixed(1)}`;
+      valueEl.textContent = `Value ${painting.value_score.toFixed(0)}`;
       valueEl.style.display = '';
     } else {
       valueEl.textContent = '';
