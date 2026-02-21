@@ -727,14 +727,12 @@
 
   // Extract Craigslist post ID from URL
   function getPaintingId(painting) {
-    if (!painting.url) return null;
-    const m = painting.url.match(/\/(\d+)\.html/);
-    return m ? m[1] : null;
+    return painting.id || null;
   }
 
   // Find painting by ID across all paintings
   function findPaintingById(id) {
-    return paintings.findIndex(p => getPaintingId(p) === id);
+    return paintings.findIndex(p => p.id === id);
   }
 
   // Update URL hash without triggering popstate
