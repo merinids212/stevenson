@@ -15,3 +15,6 @@ node_modules/
 !vercel.json
 .vercel
 .env*.local
+
+# Scraper stores (large, local-only)
+data/

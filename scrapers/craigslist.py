@@ -129,6 +129,7 @@ class CraigslistScraper(BaseScraper):
         "lathe", "grinder", "equipment", "pvc", "lumber", "plywood",
         "drywall", "concrete", "roofing", "flooring", "tile",
         "deck mat", "deck material", "scaffolding",
+        "countertop", "counter top", "quartz", "granite slab", "backsplash",
         # appliances / furniture
         "cabinet", "appliance", "washer", "refrigerator", "dishwasher",
         "microwave", "stove", "mattress", "dryer", "coffee table",
@@ -144,8 +145,17 @@ class CraigslistScraper(BaseScraper):
         "paint job", "painter needed", "painters needed",
         "painting service", "painting company", "painting business",
         "painting contractor", "painting crew", "paint crew",
+        "painters llc", "painting llc",
         "paint sprayer", "paint roller", "paint brush set",
         "gallon of", "sherwin", "benjamin moore", "behr paint",
+        "sandblasting", "leaky metal roof",
+        "commercial paint", "face painting business",
+        # vehicles / heavy equipment
+        "articulating boom", "boom lift", "boomlift",
+        "replicas starting",
+        # spam / non-art
+        "sculptorist", "investors team",
+        "service tech",
     ]
 
     @classmethod
@@ -277,6 +287,9 @@ class CraigslistScraper(BaseScraper):
 
     def _is_likely_painting(self, listing: Listing) -> bool:
         title = listing.title.lower()
+        # Price sanity — CL listings over $500K are spam/jokes
+        if listing.price is not None and listing.price > 500_000:
+            return False
         for kw in self.JUNK_KEYWORDS:
             if kw in title:
                 return False
@@ -307,6 +320,7 @@ class CraigslistScraper(BaseScraper):
         max_price: int | None = None,
         has_image: bool = True,
         delay: float = 1.0,
+        known_ids: set[str] | None = None,
     ) -> list[Listing]:
         if regions is not None:
             target = regions
@@ -317,22 +331,50 @@ class CraigslistScraper(BaseScraper):
         else:
             target = self.all_regions()
 
+        if known_ids is None:
+            known_ids = set()
+
         all_listings: list[Listing] = []
+        seen_ids: set[str] = set(known_ids)
+        total_new = 0
+        total_known = 0
+        skipped_regions = 0
+
         for i, region in enumerate(target):
             listings = self._scrape_region(
                 region, query, min_price=min_price, max_price=max_price, has_image=has_image,
             )
-            all_listings.extend(listings)
+
+            # Check how many are new vs already known
+            new_in_region = []
+            known_in_region = 0
+            for listing in listings:
+                if listing.id and listing.id in seen_ids:
+                    known_in_region += 1
+                else:
+                    if listing.id:
+                        seen_ids.add(listing.id)
+                    new_in_region.append(listing)
+
+            if listings and not new_in_region:
+                skipped_regions += 1
+            elif new_in_region:
+                all_listings.extend(new_in_region)
+                total_new += len(new_in_region)
+
+            total_known += known_in_region
+
             if i < len(target) - 1 and delay > 0:
                 time.sleep(delay)
 
-        # Deduplicate by title
-        seen: set[str] = set()
+        # Deduplicate by title (catches cross-region reposts with different IDs)
+        seen_titles: set[str] = set()
         unique: list[Listing] = []
         for listing in all_listings:
-            if listing.title not in seen:
-                seen.add(listing.title)
+            if listing.title not in seen_titles:
+                seen_titles.add(listing.title)
                 unique.append(listing)
+        title_dupes = len(all_listings) - len(unique)
 
         # Filter junk
         before = len(unique)
@@ -341,6 +383,8 @@ class CraigslistScraper(BaseScraper):
 
         state_count = len({l.state for l in unique if l.state})
         print(f"\nTotal: {len(unique)} paintings across {len(target)} regions "
-              f"({state_count} states, filtered {junk} junk from {before} unique, "
-              f"{len(all_listings)} raw)")
+              f"({state_count} states)")
+        print(f"  {total_new} new, {total_known} already known, "
+              f"{skipped_regions} regions all-known")
+        print(f"  {title_dupes} cross-region title dupes, {junk} junk filtered")
         return unique
