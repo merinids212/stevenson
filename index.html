@@ -421,23 +421,6 @@
     margin-bottom: 8px;
   }
 
-  .detail-link {
-    display: inline-block;
-    font-family: var(--font);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--black);
-    border: 1px solid var(--black);
-    padding: 10px 28px;
-    text-decoration: none;
-    transition: background 0.2s, color 0.2s;
-  }
-
-  .detail-link:hover {
-    background: var(--black);
-    color: var(--white);
-  }
 
   /* ─── EXPAND TOGGLE ─── */
   .expand-btn {
@@ -712,7 +695,6 @@
           <div class="detail-score" id="detail-score"></div>
           <div class="detail-value" id="detail-value"></div>
           <div class="detail-location" id="detail-location"></div>
-          <a class="detail-link" id="detail-link" href="#" target="_blank" rel="noopener">VIEW LISTING</a>
         </div>
       </div>
     </div>
@@ -880,7 +862,7 @@
       ? `$${painting.price.toLocaleString()}`
       : 'INQUIRE';
     document.getElementById('detail-location').textContent = painting.location || '';
-    document.getElementById('detail-link').href = painting.url || '#';
+
 
     // Artist (now in expandable)
     const artistEl = document.getElementById('detail-artist');
