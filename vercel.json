@@ -5,6 +5,9 @@
       "maxDuration": 10
     }
   },
+  "rewrites": [
+    { "source": "/p/:id", "destination": "/api/og?id=:id" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

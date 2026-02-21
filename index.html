@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Stevenson — Art Discovery Engine</title>
-<meta name="description" content="Discover paintings from Craigslist and eBay across the United States, scored by computer vision. 24,000+ listings, updated daily.">
-<meta property="og:title" content="Stevenson — Art Discovery Engine">
-<meta property="og:description" content="Discover paintings from Craigslist and eBay across the United States, scored by computer vision.">
+<title>Stevenson Gallery — Art Discovery Engine</title>
+<meta name="description" content="Discover 32,000+ paintings from Craigslist and eBay across the United States, scored by computer vision. Updated daily.">
+<meta property="og:title" content="Stevenson Gallery — Art Discovery Engine">
+<meta property="og:description" content="32,000+ paintings from Craigslist and eBay, scored by computer vision. Updated daily.">
 <meta property="og:image" content="/og.jpg">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Stevenson — Art Discovery Engine">
-<meta name="twitter:description" content="Discover paintings from Craigslist and eBay across the United States, scored by computer vision.">
+<meta name="twitter:title" content="Stevenson Gallery — Art Discovery Engine">
+<meta name="twitter:description" content="32,000+ paintings from Craigslist and eBay, scored by computer vision. Updated daily.">
 <meta name="twitter:image" content="/og.jpg">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1193,12 +1193,12 @@
     window.open(painting.url, '_blank', 'noopener');
   }
 
-  // Copy permalink
+  // Copy permalink (shareable URL with OG tags)
   function copyPermalink() {
     const painting = filtered[currentIndex];
     if (!painting) return;
     const id = getPaintingId(painting);
-    const url = window.location.origin + window.location.pathname + '#' + id;
+    const url = window.location.origin + '/p/' + id;
     navigator.clipboard.writeText(url).then(() => {
       const btn = document.getElementById('copy-btn');
       btn.textContent = '\u2713';
