@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Stevenson Gallery — Art Discovery Engine</title>
-<meta name="description" content="Discover 32,000+ paintings from Craigslist and eBay across the United States, scored by computer vision. Updated daily.">
+<meta name="description" content="An art discovery engine crawling the internet for paintings, scored by computer vision.">
 <meta property="og:title" content="Stevenson Gallery — Art Discovery Engine">
-<meta property="og:description" content="32,000+ paintings from Craigslist and eBay, scored by computer vision. Updated daily.">
+<meta property="og:description" content="An art discovery engine crawling the internet for paintings, scored by computer vision.">
 <meta property="og:image" content="/og.jpg">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Stevenson Gallery — Art Discovery Engine">
-<meta name="twitter:description" content="32,000+ paintings from Craigslist and eBay, scored by computer vision. Updated daily.">
+<meta name="twitter:description" content="An art discovery engine crawling the internet for paintings, scored by computer vision.">
 <meta name="twitter:image" content="/og.jpg">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -735,16 +735,54 @@
     return paintings.findIndex(p => p.id === id);
   }
 
-  // Update URL hash without triggering popstate
+  // Update URL and meta tags for sharing
   let suppressHashChange = false;
+  const defaultTitle = document.title;
+  const defaultOgTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+  const defaultOgImage = document.querySelector('meta[property="og:image"]')?.content || '';
+  const defaultOgDesc = document.querySelector('meta[property="og:description"]')?.content || '';
+
   function setHash(id) {
     suppressHashChange = true;
     if (id) {
-      history.pushState(null, '', '#' + id);
+      history.pushState({ paintingId: id }, '', '/p/' + id);
     } else {
-      history.pushState(null, '', window.location.pathname);
+      history.pushState(null, '', '/');
+      restoreMeta();
     }
     suppressHashChange = false;
+  }
+
+  function updateMetaForPainting(painting) {
+    const cleanTitle = painting.title.replace(/free shipping!?/gi, '').replace(/[!]+/g, '').trim();
+    const title = 'STEVENSON \u2014 ' + cleanTitle;
+    const image = painting.images && painting.images[0] ? painting.images[0] : defaultOgImage;
+    const price = painting.price ? '$' + painting.price.toLocaleString() : '';
+    const desc = price ? cleanTitle + ' \u2014 ' + price : cleanTitle;
+
+    document.title = title;
+    setMeta('og:title', title);
+    setMeta('og:image', image);
+    setMeta('og:description', desc);
+    setMeta('twitter:title', title);
+    setMeta('twitter:image', image);
+    setMeta('twitter:description', desc);
+  }
+
+  function restoreMeta() {
+    document.title = defaultTitle;
+    setMeta('og:title', defaultOgTitle);
+    setMeta('og:image', defaultOgImage);
+    setMeta('og:description', defaultOgDesc);
+    setMeta('twitter:title', defaultOgTitle);
+    setMeta('twitter:image', defaultOgImage);
+    setMeta('twitter:description', defaultOgDesc);
+  }
+
+  function setMeta(prop, content) {
+    const el = document.querySelector('meta[property="' + prop + '"]') ||
+               document.querySelector('meta[name="' + prop + '"]');
+    if (el) el.setAttribute('content', content);
   }
 
   // Build API URL from current filter
@@ -852,6 +890,7 @@
 
     const id = getPaintingId(painting);
     if (id) setHash(id);
+    updateMetaForPainting(painting);
 
     // Title — clean and truncate for display
     const cleanTitle = painting.title.replace(/free shipping!?/gi, '').replace(/[!]+/g, '').trim();
@@ -1207,16 +1246,25 @@
   }
 
 
+  // Extract painting ID from current URL (hash or /p/ path)
+  function getIdFromUrl() {
+    const hash = window.location.hash.slice(1);
+    if (hash) return hash;
+    const pathMatch = window.location.pathname.match(/^\/p\/(.+)$/);
+    if (pathMatch) return pathMatch[1];
+    return null;
+  }
+
   // Permalink
   function checkPermalink() {
-    const hash = window.location.hash.slice(1);
-    if (!hash) return;
-    let idx = filtered.findIndex(p => getPaintingId(p) === hash);
+    const id = getIdFromUrl();
+    if (!id) return;
+    let idx = filtered.findIndex(p => p.id === id);
     if (idx >= 0) {
       openDetail(idx);
       return;
     }
-    const allIdx = findPaintingById(hash);
+    const allIdx = findPaintingById(id);
     if (allIdx >= 0) {
       currentPrice = 'all';
       document.querySelectorAll('#price-filters button').forEach(b => {
@@ -1224,7 +1272,7 @@
       });
       filtered = [...paintings];
       renderGrid();
-      idx = filtered.findIndex(p => getPaintingId(p) === hash);
+      idx = filtered.findIndex(p => p.id === id);
       if (idx >= 0) openDetail(idx);
     }
   }
@@ -1232,9 +1280,9 @@
   // Browser back/forward
   window.addEventListener('popstate', () => {
     if (suppressHashChange) return;
-    const hash = window.location.hash.slice(1);
-    if (hash) {
-      const idx = filtered.findIndex(p => getPaintingId(p) === hash);
+    const id = getIdFromUrl();
+    if (id) {
+      const idx = filtered.findIndex(p => p.id === id);
       if (idx >= 0) {
         suppressHashChange = true;
         if (document.getElementById('detail-view').classList.contains('active')) {
