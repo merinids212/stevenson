@@ -280,26 +280,15 @@ let pointsMesh = null
 async function loadData() {
   const status = document.getElementById('loading-status')
 
-  // Fetch liked IDs
-  status.textContent = 'Loading likes...'
-  try {
-    const feedRes = await fetch(`${API}/api/feed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seen: [], size: 1 }),
-    })
-    const feedData = await feedRes.json()
-    likedSet = new Set(feedData.liked || [])
-  } catch {}
-
-  // Fetch 3D map
+  // Fetch taste map (includes liked IDs)
   status.textContent = 'Loading embedding map...'
-  const mapRes = await fetch(`${API}/taste_map.json`)
+  const mapRes = await fetch(`${API}/api/taste-map`)
   if (!mapRes.ok) {
-    status.textContent = 'taste_map.json not found — run project_3d.py first'
+    status.textContent = 'Failed to load taste map — run project_3d.py first'
     return
   }
   mapData = await mapRes.json()
+  likedSet = new Set(mapData.liked || [])
 
   status.textContent = 'Building point cloud...'
   await new Promise(r => requestAnimationFrame(r))
