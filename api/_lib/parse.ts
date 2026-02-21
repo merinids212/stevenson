@@ -36,6 +36,29 @@ function jsonParse<T>(v: string | undefined): T | null {
   }
 }
 
+// Title patterns that indicate non-art listings (house painting services, paint equipment, etc.)
+const SPAM_PATTERNS = [
+  /\bi will paint\b(?!ing)/i,
+  /paint\/?repaint/i,
+  /interior\s*[&+]\s*exterior\s*paint/i,
+  /exterior\s*[&+]\s*interior\s*paint/i,
+  /interior\s+(?:or\s+)?exterior\s+paint/i,
+  /exterior\s+(?:or\s+)?interior\s+paint/i,
+  /free\s+estimates?\b.*paint/i,
+  /paint.*free\s+estimates?/i,
+  /cheaper\s+than\s+the\s+competition/i,
+  /\bhouse\s+painter\b/i,
+  /\bhouse\s+paint\b(?!ing)/i,
+  /paint\s+sprayer/i,
+  /paint\s+crew/i,
+  /\bairless\s+paint/i,
+  /will\s+paint\s+your\s+(?:house|home|room|wall|fence|deck)/i,
+]
+
+export function isSpamTitle(title: string): boolean {
+  return SPAM_PATTERNS.some(p => p.test(title))
+}
+
 export function parsePainting(hash: Record<string, string>, id: string): Painting {
   return {
     id,

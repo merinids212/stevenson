@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getRedis } from './_lib/redis'
-import { parsePainting, PAINTING_FIELDS, hmgetToHash } from './_lib/parse'
+import { parsePainting, PAINTING_FIELDS, hmgetToHash, isSpamTitle } from './_lib/parse'
 
 const LIKES_KEY = 'stv:likes'
 const DIM = 768
@@ -123,6 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const painting = parsePainting(hash, fetchIds[i])
     if (!painting.images.length) continue
+    if (isSpamTitle(painting.title)) continue
 
     const dist = distMap.get(fetchIds[i]) ?? 2.0
     const similarity = 1 - dist  // cosine: 0=orthogonal, 1=identical

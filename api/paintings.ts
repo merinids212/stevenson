@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getRedis } from './_lib/redis'
-import { parsePainting, PAINTING_FIELDS, hmgetToHash } from './_lib/parse'
+import { parsePainting, PAINTING_FIELDS, hmgetToHash, isSpamTitle } from './_lib/parse'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -64,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .filter(p => p.images.length > 0)
+    .filter(p => !isSpamTitle(p.title))
 
   // Additional filters
   if (minPrice !== undefined) paintings = paintings.filter(p => p.price !== null && p.price >= minPrice)

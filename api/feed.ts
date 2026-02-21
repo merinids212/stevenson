@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getRedis } from './_lib/redis'
-import { parsePainting, PAINTING_FIELDS, hmgetToHash } from './_lib/parse'
+import { parsePainting, PAINTING_FIELDS, hmgetToHash, isSpamTitle } from './_lib/parse'
 
 const LIKES_KEY = 'stv:likes'
 const DIM = 768
@@ -99,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!Object.keys(hash).length) return null
       const p = parsePainting(hash, item.id)
       if (!p.images.length) return null
+      if (isSpamTitle(p.title)) return null
       return { ...p, _reason: item.reason, _pole: item.pole }
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
