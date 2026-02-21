@@ -85,6 +85,16 @@
     margin-bottom: 40px;
   }
 
+  .about-content h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray);
+    margin-top: 48px;
+    margin-bottom: 16px;
+  }
+
   .about-content p {
     font-size: 13px;
     line-height: 1.8;
@@ -122,6 +132,8 @@
     padding: 10px 28px;
     text-decoration: none;
     transition: background 0.2s, color 0.2s;
+    margin-right: 12px;
+    margin-bottom: 12px;
   }
 
   .about-link:hover {
@@ -141,59 +153,109 @@
   <h1>Stevenson</h1>
 
   <p>
-    A curated index of paintings for sale across California,
-    sourced from Craigslist listings in real time.
+    An art discovery engine that continuously scrapes painting listings
+    from Craigslist and eBay across the United States, scores them with
+    computer vision models, and serves a curated gallery — surfacing
+    the most interesting work from the most unexpected places.
   </p>
 
   <p>
-    Every listing is scraped, filtered, and presented in a
-    clean gallery format. No accounts, no fees, no middlemen
-    — just paintings and the people selling them.
-  </p>
-
-  <p>
-    Each painting is scored by a CLIP ViT-L/14 vision model
-    and the LAION improved-aesthetic-predictor, a neural network
-    trained on human aesthetic ratings. Artist names are extracted
-    from titles via pattern matching, and a value score surfaces
-    underpriced gems — high art quality relative to asking price.
+    No accounts, no fees, no middlemen. Just paintings and the
+    people selling them.
   </p>
 
   <div class="about-stats" id="stats"></div>
 
-  <h1>How It Works</h1>
+  <h2>Vision Scoring</h2>
 
   <p>
-    <strong>scraper.py</strong> — Crawls Craigslist art listings
-    across California regions. Downloads metadata, images, prices,
-    and locations into paintings.csv, then converts to paintings.json.
+    Every painting is processed by a CLIP ViT-L/14 vision transformer to
+    extract a 768-dimensional embedding — a numerical fingerprint of
+    what the image "looks like" to a neural network. These embeddings
+    are then scored by a LAION aesthetic predictor, a model trained on
+    millions of human aesthetic preference ratings, calibrated to a
+    0–100 scale.
   </p>
 
   <p>
-    <strong>scorer.py</strong> — Runs every painting through
-    OpenAI's CLIP ViT-L/14 to extract visual embeddings (768-dim),
-    then scores them three ways: the LAION aesthetic MLP (calibrated
-    1–10), CLIP prompt quality (high vs low art similarity), and
-    uniqueness (inverse average cosine similarity to all other
-    paintings). The composite art score blends LAION (50%),
-    prompt quality (20%), and uniqueness (30%). It also parses
-    artist names from titles and computes a value score for
-    gem finding.
+    On top of the aesthetic score, each painting is evaluated for visual
+    quality (how closely it resembles professionally photographed fine art
+    versus casual snapshots) and uniqueness (how different it is from
+    everything else in the collection, measured by cosine distance in
+    embedding space). These three signals — aesthetics, quality, and
+    uniqueness — are blended into a composite art score.
+  </p>
+
+  <h2>Style Classification</h2>
+
+  <p>
+    CLIP's zero-shot classification capability is used to identify
+    the medium and style of each painting — oil, watercolor, acrylic,
+    pastel, ink, digital, and others — along with subject matter like
+    landscape, portrait, abstract, and still life. Artist names are
+    parsed from listing titles using pattern matching. Together,
+    these labels power the analytics breakdowns and filtered views.
+  </p>
+
+  <h2>Taste Learning</h2>
+
+  <p>
+    The feed learns from your likes in real time. As you heart paintings,
+    the system builds a taste profile from the CLIP embeddings of
+    your liked works. When you've liked enough paintings, the algorithm
+    identifies distinct "poles" in your taste — maybe you're drawn to both
+    moody seascapes and vibrant street scenes — and queries each pole
+    separately, ensuring your feed stays diverse rather than collapsing
+    into a single aesthetic.
   </p>
 
   <p>
-    <strong>index.html</strong> — The gallery. Grid view with
-    region and price filters, FLIP animations from thumbnail to
-    detail, and a GEMS filter that sorts by value score.
+    Style affinity and price range are used as light signals — gentle
+    nudges within small windows, never hard filters — so the feed
+    feels personalized without becoming a filter bubble.
   </p>
+
+  <h2>Gem Finding</h2>
 
   <p>
-    <strong>analytics.html</strong> — Dashboard with score
-    distributions, style/region/medium breakdowns, and an
-    explorer table for hunting specific paintings.
+    A value score identifies underpriced work — paintings with high
+    aesthetic quality relative to their asking price. The GEMS filter
+    surfaces these finds: technically accomplished paintings that
+    happen to be listed cheaply, often by sellers who don't know
+    what they have.
   </p>
 
-  <a class="about-link" href="index.html">Browse Gallery</a>
+  <h2>The Taste Map</h2>
+
+  <p>
+    All 768-dimensional embeddings are projected into three dimensions
+    using UMAP (Uniform Manifold Approximation and Projection), a
+    manifold learning technique that preserves the local neighborhood
+    structure of high-dimensional data. The result is a navigable 3D
+    point cloud where similar paintings cluster together — oil landscapes
+    in one region, abstract acrylics in another, portraits forming
+    their own galaxy. Your liked paintings appear as bright red dots,
+    revealing the shape of your taste in embedding space.
+  </p>
+
+  <h2>Infrastructure</h2>
+
+  <p>
+    Scrapers run on a schedule, collecting new listings and deduplicating
+    against existing data. Scoring runs on Apple Silicon using Metal
+    Performance Shaders for GPU-accelerated inference. All painting data,
+    scores, embeddings, and UMAP coordinates are stored in Redis with
+    sorted set indexes for fast filtered queries. The frontend is static
+    HTML served by Vercel with serverless TypeScript API functions.
+    No build step, no framework — just HTML, CSS, and JavaScript.
+  </p>
+
+  <div style="margin-top: 48px;">
+    <a class="about-link" href="index.html">Gallery</a>
+    <a class="about-link" href="feed.html">Feed</a>
+    <a class="about-link" href="taste.html">Taste Map</a>
+    <a class="about-link" href="analytics.html">Analytics</a>
+  </div>
 </div>
 
 <script>
@@ -201,13 +263,16 @@
     .then(r => r.json())
     .then(s => {
       const stats = [
-        ['Listings', parseInt(s.total_listings).toLocaleString()],
+        ['Total listings', parseInt(s.total_listings).toLocaleString()],
+        ['Sources', 'Craigslist + eBay'],
         ['Regions', s.regions],
-        ['Price range', `$${parseFloat(s.price_min).toLocaleString()} — $${parseFloat(s.price_max).toLocaleString()}`],
+        ['Price range', `$${parseFloat(s.price_min).toLocaleString()} \u2014 $${parseFloat(s.price_max).toLocaleString()}`],
         ['Median price', `$${parseFloat(s.price_median).toLocaleString()}`],
-        ['CLIP scored', parseInt(s.scored_count).toLocaleString()],
-        ['Artists parsed', parseInt(s.artists_count).toLocaleString()],
-        ['Model', 'ViT-L/14 + LAION MLP'],
+        ['Vision scored', parseInt(s.scored_count).toLocaleString()],
+        ['Artists identified', parseInt(s.artists_count).toLocaleString()],
+        ['Vision model', 'CLIP ViT-L/14'],
+        ['Aesthetic model', 'LAION Improved Aesthetic Predictor'],
+        ['Embedding dimensions', '768'],
       ];
 
       const container = document.getElementById('stats');
