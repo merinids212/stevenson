@@ -766,6 +766,8 @@
   let currentImageIndex = 0;
   let currentPrice = 'all';
   let flipTimeouts = [];
+  let displayedCount = 0;
+  const PAGE_SIZE = 60;
 
   function clearFlipTimeouts() {
     flipTimeouts.forEach(id => clearTimeout(id));
@@ -796,14 +798,24 @@
     suppressHashChange = false;
   }
 
-  // Load paintings
-  fetch('/api/paintings')
+  // Load paintings — first page fast, then rest in background
+  fetch('/api/paintings?limit=120')
     .then(r => r.json())
     .then(data => {
       paintings = data.paintings.filter(p => p.images && p.images.length > 0);
       filtered = [...paintings];
       renderGrid();
       checkPermalink();
+
+      // Load remaining in background if more exist
+      if (data.total > paintings.length) {
+        fetch('/api/paintings')
+          .then(r => r.json())
+          .then(all => {
+            paintings = all.paintings.filter(p => p.images && p.images.length > 0);
+            applyFilters();
+          });
+      }
     });
 
   // Shorten title for grid
@@ -845,16 +857,24 @@
     });
   });
 
-  // Render grid
+  // Render grid — initial batch
   function renderGrid() {
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
+    displayedCount = 0;
     document.getElementById('nav-count').textContent = filtered.length;
+    renderMore();
+  }
 
-    filtered.forEach((painting, i) => {
+  // Append next batch of items
+  function renderMore() {
+    const grid = document.getElementById('grid');
+    const end = Math.min(displayedCount + PAGE_SIZE, filtered.length);
+    for (let i = displayedCount; i < end; i++) {
+      const painting = filtered[i];
       const item = document.createElement('div');
       item.className = 'grid-item';
-      item.style.animationDelay = `${Math.min(i * 0.03, 1.2)}s`;
+      item.style.animationDelay = `${Math.min((i - displayedCount) * 0.03, 1.2)}s`;
       item.onclick = () => openDetail(i, item);
 
       item.innerHTML = `
@@ -864,7 +884,8 @@
         <div class="grid-item-title">${shortTitle(painting.title)}</div>
       `;
       grid.appendChild(item);
-    });
+    }
+    displayedCount = end;
   }
 
   // Populate detail view content (shared by open and switch)
@@ -1255,6 +1276,14 @@
       if (detail.classList.contains('active')) {
         closeDetail();
       }
+    }
+  });
+
+  // Infinite scroll
+  document.getElementById('grid-view').addEventListener('scroll', () => {
+    const el = document.getElementById('grid-view');
+    if (displayedCount < filtered.length && el.scrollTop + el.clientHeight > el.scrollHeight - 600) {
+      renderMore();
     }
   });
 
