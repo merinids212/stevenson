@@ -424,6 +424,244 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
+
+  /* ─── DETAIL VIEW ─── */
+  #card-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: var(--bg);
+    z-index: 200;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #card-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .acard-img-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+    background: #050505;
+  }
+
+  img.acard-img {
+    max-width: 88%;
+    max-height: 80vh;
+    object-fit: contain;
+    will-change: transform;
+    transition: opacity 0.2s ease;
+  }
+  img.acard-img.switching { opacity: 0; }
+
+  .acard-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #333;
+    font-size: 32px;
+    cursor: pointer;
+    padding: 16px 10px;
+    transition: color 0.15s;
+    z-index: 2;
+    font-family: var(--font);
+  }
+  .acard-arrow:hover { color: var(--bright); }
+  .acard-arrow-left { left: 8px; }
+  .acard-arrow-right { right: 8px; }
+
+  .acard-dots {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+  }
+  .acard-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #333;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .acard-dot.active { background: var(--fg); }
+
+  .acard-data {
+    height: 100vh;
+    overflow-y: auto;
+    padding: 40px 32px 32px;
+    border-left: 1px solid var(--mute);
+    position: relative;
+  }
+
+  .acard-close {
+    position: fixed;
+    top: 0; left: 0;
+    width: 40px; height: 40px;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--mute);
+    border-bottom: 1px solid var(--mute);
+    color: var(--dim);
+    font-size: 16px;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: color 0.15s;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .acard-close:hover { color: var(--bright); }
+
+  .acard-title {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--bright);
+    line-height: 1.4;
+  }
+
+  .acard-artist {
+    font-size: 11px;
+    color: #b8a060;
+    margin-top: 4px;
+  }
+
+  .acard-meta {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .acard-meta-row {
+    font-size: 10px;
+    color: #555;
+    display: flex;
+    gap: 6px;
+  }
+  .acard-meta-row .ml { color: #333; width: 60px; text-transform: uppercase; font-size: 8px; letter-spacing: 0.06em; flex-shrink: 0; padding-top: 1px; }
+  .acard-meta-row .mv { color: var(--fg); }
+
+  .acard-section-head {
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-top: 24px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #1a1a1a;
+  }
+
+  .acard-scores {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .acard-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 18px;
+  }
+  .acard-bar .sl {
+    width: 72px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .acard-bar .st {
+    flex: 1;
+    height: 12px;
+    background: var(--mute);
+  }
+  .acard-bar .sf {
+    height: 100%;
+    transition: width 0.5s ease;
+  }
+  .acard-bar .sv {
+    width: 36px;
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .acard-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .acard-link {
+    display: inline-block;
+    margin-top: 24px;
+    font-family: var(--font);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-decoration: none;
+    border: 1px solid #222;
+    padding: 6px 14px;
+    transition: all 0.15s;
+  }
+  .acard-link:hover { color: var(--bright); border-color: var(--bright); }
+
+  .acard-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 28px;
+    padding-top: 12px;
+    border-top: 1px solid #1a1a1a;
+  }
+  .acard-nav button {
+    font-family: var(--font);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: color 0.15s;
+  }
+  .acard-nav button:hover { color: var(--bright); }
+  .acard-pos {
+    font-size: 8px;
+    color: #333;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 700px) {
+    #card-overlay {
+      grid-template-columns: 1fr;
+      grid-template-rows: 50vh 1fr;
+    }
+    .acard-img-area { height: 50vh; }
+    .acard-data { height: auto; padding: 20px 16px; border-left: none; border-top: 1px solid var(--mute); }
+  }
 </style>
 </head>
 <body>
@@ -499,6 +737,31 @@
     </table>
   </div>
   <div class="pag" id="pag"></div>
+</div>
+
+<div id="card-overlay">
+  <button class="acard-close" id="card-close">&#8249;</button>
+  <div class="acard-img-area">
+    <button class="acard-arrow acard-arrow-left" id="card-arrow-left">&#8249;</button>
+    <img class="acard-img" id="card-img" src="" alt="">
+    <button class="acard-arrow acard-arrow-right" id="card-arrow-right">&#8250;</button>
+    <div class="acard-dots" id="card-dots"></div>
+  </div>
+  <div class="acard-data" id="card-data">
+    <div class="acard-title" id="card-title"></div>
+    <div class="acard-artist" id="card-artist"></div>
+    <div class="acard-meta" id="card-meta"></div>
+    <div class="acard-section-head">Scores</div>
+    <div class="acard-scores" id="card-scores"></div>
+    <div class="acard-section-head">Tags</div>
+    <div class="acard-tags" id="card-tags"></div>
+    <a class="acard-link" id="card-link" href="#" target="_blank" rel="noopener">View on Craigslist &#8599;</a>
+    <div class="acard-nav">
+      <button id="card-prev">&#8249; Prev</button>
+      <span class="acard-pos" id="card-pos"></span>
+      <button id="card-next">Next &#8250;</button>
+    </div>
+  </div>
 </div>
 
 <div class="foot">Stevenson / California Paintings / CLIP ViT-L/14 + LAION Aesthetic</div>
@@ -686,7 +949,8 @@ function scoreColor(v){
 function tbl(){
   const s=pg*PS,p=exp.slice(s,s+PS),body=document.getElementById('tbody');
   document.getElementById('exp-count').textContent=exp.length+' results \u00b7 page '+(pg+1)+'/'+Math.ceil(exp.length/PS);
-  body.innerHTML=p.map(i=>{
+  body.innerHTML=p.map((i,idx)=>{
+    const absIdx=s+idx;
     const tags=[
       ...i.tags.mediums.map(t=>`<span class="tag medium">${t}</span>`),
       ...(i.clip_styles||[]).slice(0,1).map(s=>`<span class="tag style">${s.style}</span>`),
@@ -695,7 +959,7 @@ function tbl(){
     ].join('');
     const v=i.art_score||0;
     const vs=i.value_score;
-    return `<tr><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc"><a href="${i.url}" target="_blank" rel="noopener">${i.title}</a></td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${RL[i.region]||i.region}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs*10):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
+    return `<tr onclick="openCard(${absIdx},this.querySelector('.thumb'))" style="cursor:pointer"><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc">${i.title}</td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${RL[i.region]||i.region}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs*10):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
   }).join('');
   pagi();
 }
@@ -705,6 +969,302 @@ function pagi(){
   if(t<=1){el.innerHTML='';return;}
   el.innerHTML=`<button ${pg===0?'disabled':''} onclick="pg--;tbl()">Prev</button><span class="pi">${pg+1}/${t} &middot; ${exp.length}</span><button ${pg>=t-1?'disabled':''} onclick="pg++;tbl()">Next</button>`;
 }
+
+// ─── CARD DETAIL ───
+let cardOpen=false, cardIndex=-1, cardImgIndex=0, cardFlipTimeouts=[];
+
+const overlay=document.getElementById('card-overlay');
+const cardImg=document.getElementById('card-img');
+const cardData=document.getElementById('card-data');
+
+function openCard(rowIndex, thumbEl){
+  cardOpen=true;
+  cardIndex=rowIndex;
+  cardImgIndex=0;
+  const painting=exp[rowIndex];
+  if(!painting)return;
+  populateCard(painting);
+
+  // Clear previous timeouts
+  cardFlipTimeouts.forEach(t=>clearTimeout(t));
+  cardFlipTimeouts=[];
+
+  // Reset all inline styles
+  overlay.style.cssText='';
+  cardImg.style.cssText='';
+  cardData.style.cssText='';
+
+  // Get thumb rect BEFORE layout changes
+  let thumbRect=null;
+  if(thumbEl) thumbRect=thumbEl.getBoundingClientRect();
+
+  // Prep data panel hidden (will slide in)
+  cardData.style.opacity='0';
+  cardData.style.transform='translateY(20px)';
+
+  // Show overlay instantly but transparent — image visible, bg not yet
+  overlay.style.background='rgba(5,5,5,0)';
+  overlay.style.opacity='1';
+  overlay.classList.add('active');
+
+  requestAnimationFrame(()=>{
+    const finalRect=cardImg.getBoundingClientRect();
+
+    if(thumbRect && finalRect.width>0 && finalRect.height>0){
+      // Invert: place image at thumbnail position
+      const dx=(thumbRect.left+thumbRect.width/2)-(finalRect.left+finalRect.width/2);
+      const dy=(thumbRect.top+thumbRect.height/2)-(finalRect.top+finalRect.height/2);
+      const s=Math.min(thumbRect.width/finalRect.width, thumbRect.height/finalRect.height);
+
+      cardImg.style.transition='none';
+      cardImg.style.transform=`translate(${dx}px,${dy}px) scale(${s})`;
+
+      requestAnimationFrame(()=>{
+        // Play: background washes in while image flies to final position
+        overlay.style.transition='background 0.45s ease';
+        overlay.style.background='';
+
+        cardImg.style.transition='transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        cardImg.style.transform='none';
+
+        // Stagger data panel in
+        cardFlipTimeouts.push(setTimeout(()=>{
+          cardData.style.transition='opacity 0.35s ease, transform 0.35s ease';
+          cardData.style.opacity='1';
+          cardData.style.transform='none';
+        },150));
+
+        // Cleanup after animation
+        cardFlipTimeouts.push(setTimeout(()=>{
+          overlay.style.cssText='';
+          cardImg.style.cssText='';
+          cardData.style.cssText='';
+        },650));
+      });
+    } else {
+      // No thumb — fallback fade
+      overlay.style.transition='background 0.35s ease, opacity 0.35s ease';
+      overlay.style.background='';
+      cardData.style.transition='opacity 0.35s ease, transform 0.35s ease';
+      cardData.style.opacity='1';
+      cardData.style.transform='none';
+
+      cardFlipTimeouts.push(setTimeout(()=>{
+        overlay.style.cssText='';
+        cardData.style.cssText='';
+      },400));
+    }
+  });
+
+  document.body.style.overflow='hidden';
+}
+
+function closeCard(){
+  if(!cardOpen)return;
+  cardFlipTimeouts.forEach(t=>clearTimeout(t));
+  cardFlipTimeouts=[];
+
+  // Find the table row thumbnail to FLIP back to
+  const rows=document.querySelectorAll('#tbody tr');
+  const pageOffset=pg*PS;
+  const rowIdx=cardIndex-pageOffset;
+  let thumbRect=null;
+  if(rowIdx>=0 && rowIdx<rows.length){
+    const thumb=rows[rowIdx].querySelector('.thumb');
+    if(thumb) thumbRect=thumb.getBoundingClientRect();
+  }
+
+  const imgRect=cardImg.getBoundingClientRect();
+
+  // Hide data panel fast
+  cardData.style.transition='opacity 0.15s ease';
+  cardData.style.opacity='0';
+
+  if(thumbRect && imgRect.width>0 && imgRect.height>0){
+    const dx=(thumbRect.left+thumbRect.width/2)-(imgRect.left+imgRect.width/2);
+    const dy=(thumbRect.top+thumbRect.height/2)-(imgRect.top+imgRect.height/2);
+    const s=Math.min(thumbRect.width/imgRect.width, thumbRect.height/imgRect.height);
+
+    // Fly image back to thumbnail
+    cardImg.style.transition='transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    cardImg.style.transform=`translate(${dx}px,${dy}px) scale(${s})`;
+
+    // Fade background to transparent
+    overlay.style.transition='background 0.35s ease';
+    overlay.style.background='rgba(5,5,5,0)';
+
+    cardFlipTimeouts.push(setTimeout(()=>{
+      overlay.classList.remove('active');
+      overlay.style.cssText='';
+      cardImg.style.cssText='';
+      cardData.style.cssText='';
+      cardOpen=false;
+      document.body.style.overflow='';
+    },450));
+  } else {
+    // Fallback
+    overlay.style.transition='opacity 0.3s ease';
+    overlay.style.opacity='0';
+
+    cardFlipTimeouts.push(setTimeout(()=>{
+      overlay.classList.remove('active');
+      overlay.style.cssText='';
+      cardImg.style.cssText='';
+      cardData.style.cssText='';
+      cardOpen=false;
+      document.body.style.overflow='';
+    },350));
+  }
+}
+
+function populateCard(painting){
+  // Title
+  document.getElementById('card-title').textContent=painting.title;
+
+  // Artist
+  const artistEl=document.getElementById('card-artist');
+  if(painting.artist){
+    artistEl.textContent=painting.artist;
+    artistEl.style.display='';
+  } else {
+    artistEl.style.display='none';
+  }
+
+  // Meta
+  const metaRows=[];
+  if(painting.price) metaRows.push({l:'Price',v:'$'+painting.price.toLocaleString()});
+  metaRows.push({l:'Region',v:RL[painting.region]||painting.region});
+  if(painting.location) metaRows.push({l:'Location',v:painting.location});
+  if(painting.date_posted) metaRows.push({l:'Posted',v:painting.date_posted});
+  document.getElementById('card-meta').innerHTML=metaRows.map(r=>
+    `<div class="acard-meta-row"><span class="ml">${r.l}</span><span class="mv">${r.v}</span></div>`
+  ).join('');
+
+  // Scores
+  const scores=[];
+  if(painting.art_score!=null) scores.push({l:'Art',v:painting.art_score,max:100});
+  if(painting.value_score!=null) scores.push({l:'Value',v:painting.value_score,max:10});
+  if(painting.quality_score!=null) scores.push({l:'Quality',v:painting.quality_score,max:100});
+  if(painting.uniqueness!=null) scores.push({l:'Unique',v:painting.uniqueness,max:100});
+  if(painting.aesthetic_score!=null) scores.push({l:'Aesthetic',v:painting.aesthetic_score,max:10});
+
+  document.getElementById('card-scores').innerHTML=scores.map(s=>{
+    const pct=Math.min(100,(s.v/s.max)*100).toFixed(1);
+    const normFor100=s.max===10?s.v*10:s.v;
+    const col=scoreColor(normFor100);
+    return `<div class="acard-bar"><span class="sl">${s.l}</span><div class="st"><div class="sf" style="width:${pct}%;background:${col}"></div></div><span class="sv" style="color:${col}">${s.v.toFixed(1)}</span></div>`;
+  }).join('');
+
+  // Tags
+  const t=painting.tags;
+  const tagHtml=[
+    ...t.mediums.map(m=>`<span class="tag medium">${m}</span>`),
+    ...(painting.clip_styles||[]).map(s=>`<span class="tag style">${s.style}</span>`),
+    ...(painting.artist?[`<span class="tag artist">${painting.artist}</span>`]:[]),
+    ...t.flags.map(f=>`<span class="tag">${f}</span>`),
+  ].join('');
+  document.getElementById('card-tags').innerHTML=tagHtml||'<span style="color:#333;font-size:9px">None</span>';
+
+  // Link
+  document.getElementById('card-link').href=painting.url||'#';
+
+  // Position
+  document.getElementById('card-pos').textContent=(cardIndex+1)+' of '+exp.length;
+
+  // Image
+  cardImgIndex=0;
+  cardImg.src=painting.images[0];
+  renderDots(painting);
+  updateArrows(painting);
+}
+
+function renderDots(painting){
+  const dotsEl=document.getElementById('card-dots');
+  if(!painting.images||painting.images.length<=1){
+    dotsEl.innerHTML='';
+    return;
+  }
+  dotsEl.innerHTML=painting.images.map((_,i)=>
+    `<button class="acard-dot${i===cardImgIndex?' active':''}" data-di="${i}"></button>`
+  ).join('');
+}
+
+function updateArrows(painting){
+  const hasMulti=painting.images&&painting.images.length>1;
+  document.getElementById('card-arrow-left').style.display=hasMulti?'':'none';
+  document.getElementById('card-arrow-right').style.display=hasMulti?'':'none';
+}
+
+function cardGoImage(idx){
+  const painting=exp[cardIndex];
+  if(!painting||!painting.images)return;
+  const len=painting.images.length;
+  cardImgIndex=((idx%len)+len)%len;
+
+  cardImg.classList.add('switching');
+  setTimeout(()=>{
+    cardImg.src=painting.images[cardImgIndex];
+    cardImg.classList.remove('switching');
+  },200);
+
+  document.querySelectorAll('.acard-dot').forEach((d,i)=>{
+    d.classList.toggle('active',i===cardImgIndex);
+  });
+}
+
+function cardPrev(){
+  if(cardIndex<=0)return;
+  cardIndex--;
+  cardImgIndex=0;
+  // Crossfade
+  cardData.style.transition='opacity 0.15s ease';
+  cardData.style.opacity='0';
+  cardImg.classList.add('switching');
+  setTimeout(()=>{
+    populateCard(exp[cardIndex]);
+    cardImg.classList.remove('switching');
+    cardData.style.opacity='1';
+  },200);
+  setTimeout(()=>{cardData.style.transition='';},400);
+}
+
+function cardNext(){
+  if(cardIndex>=exp.length-1)return;
+  cardIndex++;
+  cardImgIndex=0;
+  cardData.style.transition='opacity 0.15s ease';
+  cardData.style.opacity='0';
+  cardImg.classList.add('switching');
+  setTimeout(()=>{
+    populateCard(exp[cardIndex]);
+    cardImg.classList.remove('switching');
+    cardData.style.opacity='1';
+  },200);
+  setTimeout(()=>{cardData.style.transition='';},400);
+}
+
+// Event listeners
+document.getElementById('card-close').addEventListener('click',closeCard);
+document.getElementById('card-prev').addEventListener('click',cardPrev);
+document.getElementById('card-next').addEventListener('click',cardNext);
+document.getElementById('card-arrow-left').addEventListener('click',(e)=>{e.stopPropagation();cardGoImage(cardImgIndex-1);});
+document.getElementById('card-arrow-right').addEventListener('click',(e)=>{e.stopPropagation();cardGoImage(cardImgIndex+1);});
+document.getElementById('card-dots').addEventListener('click',(e)=>{
+  const dot=e.target.closest('.acard-dot');
+  if(dot) cardGoImage(parseInt(dot.dataset.di));
+});
+
+// Keyboard
+document.addEventListener('keydown',(e)=>{
+  if(!cardOpen)return;
+  switch(e.key){
+    case 'Escape': closeCard(); break;
+    case 'ArrowLeft': e.preventDefault(); cardGoImage(cardImgIndex-1); break;
+    case 'ArrowRight': e.preventDefault(); cardGoImage(cardImgIndex+1); break;
+    case 'ArrowUp': e.preventDefault(); cardPrev(); break;
+    case 'ArrowDown': e.preventDefault(); cardNext(); break;
+  }
+});
 </script>
 </body>
 </html>
