@@ -119,17 +119,33 @@ class CraigslistScraper(BaseScraper):
     }
 
     JUNK_KEYWORDS = [
-        "book", "novel", "compressor", "scaffold", "mercedes", "benz", "scion",
-        "ppe", "clean suit", "scissor lift", "golf course", "manufacturing",
-        "equipment", "deck mat", "deck material", "coffee table", "cnc mill",
-        "lathe", "grinder", "dryer", "forklift", "trailer", "truck", "car ",
+        # vehicles
         "sedan", "coupe", "suv", "honda", "toyota", "ford", "chevy", "bmw",
         "lexus", "audi", "nissan", "hyundai", "kia", "jeep", "dodge",
         "chrysler", "cadillac", "lincoln", "volvo", "subaru", "mazda",
-        "foot cover", "face shield", "scaffolding", "pvc", "lumber",
-        "plywood", "drywall", "concrete", "roofing", "flooring", "tile",
+        "mercedes", "benz", "scion", "truck", "car ", "trailer", "forklift",
+        # construction / industrial
+        "compressor", "scaffold", "scissor lift", "cnc mill", "manufacturing",
+        "lathe", "grinder", "equipment", "pvc", "lumber", "plywood",
+        "drywall", "concrete", "roofing", "flooring", "tile",
+        "deck mat", "deck material", "scaffolding",
+        # appliances / furniture
         "cabinet", "appliance", "washer", "refrigerator", "dishwasher",
-        "microwave", "stove", "mattress",
+        "microwave", "stove", "mattress", "dryer", "coffee table",
+        "ikea", "armchair", "recliner", "sofa", "couch", "loveseat",
+        "dresser", "nightstand", "bookshelf", "bookcase",
+        "office chair", "office desk", "dining table", "dining set", "bar stool",
+        "futon", "bunk bed", "baby crib", "high chair", "playpen",
+        # kids / toys / misc non-art
+        "kids table", "toy", "lego", "playset", "trampoline",
+        "book", "novel", "textbook", "ppe", "clean suit",
+        "foot cover", "face shield", "golf course",
+        # services (painting services, not actual paintings)
+        "paint job", "painter needed", "painters needed",
+        "painting service", "painting company", "painting business",
+        "painting contractor", "painting crew", "paint crew",
+        "paint sprayer", "paint roller", "paint brush set",
+        "gallon of", "sherwin", "benjamin moore", "behr paint",
     ]
 
     @classmethod
