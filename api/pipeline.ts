@@ -30,6 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const liveScored = clScored + ebScored
   const totalListings = totalIndexed || parseInt(raw.total_listings) || 0
 
+  // Embeddings: tracked via stv:embedded SET
+  const embeddedCount = await redis.scard('stv:embedded')
+
   // Likes count
   const likesCount = await redis.scard('stv:likes')
 
@@ -62,6 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     price_min: parseFloat(raw.price_min) || 0,
     price_max: parseFloat(raw.price_max) || 0,
     price_median: parseFloat(raw.price_median) || 0,
+    embedded_count: embeddedCount,
+    embed_pct: totalListings > 0 ? Math.round(embeddedCount / totalListings * 100) : 0,
     likes_count: likesCount,
     vec_index_ready: vecIndexReady,
   }

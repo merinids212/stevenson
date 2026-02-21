@@ -204,6 +204,7 @@ def push_embeddings(embeddings: dict, r_bin) -> int:
     pipe = r_bin.pipeline()
     for pid, emb_bytes in embeddings.items():
         pipe.hset(f"stv:p:{pid}", "embedding", emb_bytes)
+        pipe.sadd("stv:embedded", pid)  # track which paintings have embeddings
     pipe.execute()
     return len(embeddings)
 

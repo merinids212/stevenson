@@ -311,7 +311,9 @@
   }
 
   .log-ts { color: #333; white-space: nowrap; min-width: 60px; }
-  .log-src { color: var(--blue); white-space: nowrap; min-width: 28px; text-transform: uppercase; }
+  .log-src { white-space: nowrap; min-width: 40px; text-transform: uppercase; }
+  .log-src.score { color: var(--blue); }
+  .log-src.embed { color: var(--purple); }
   .log-msg { color: var(--dim); }
   .log-msg .n { color: var(--bright); font-weight: 500; }
   .log-msg .g { color: var(--green); }
@@ -350,12 +352,15 @@
 <div class="hero" id="hero">
   <div class="hero-stat"><div class="num">--</div><div class="lbl">Total</div><div class="sub">loading</div></div>
   <div class="hero-stat"><div class="num">--</div><div class="lbl">Scored</div><div class="sub">loading</div></div>
-  <div class="hero-stat"><div class="num">--</div><div class="lbl">Unscored</div><div class="sub">loading</div></div>
-  <div class="hero-stat"><div class="num">--</div><div class="lbl">Coverage</div><div class="sub">loading</div></div>
+  <div class="hero-stat"><div class="num">--</div><div class="lbl">Embedded</div><div class="sub">loading</div></div>
+  <div class="hero-stat"><div class="num">--</div><div class="lbl">Likes</div><div class="sub">loading</div></div>
 </div>
 
 <div class="sec-head">Scoring Progress</div>
 <div class="progress-section" id="progress"></div>
+
+<div class="sec-head">Embedding Progress</div>
+<div class="progress-section" id="embed-progress"></div>
 
 <div class="sec-head">Sources</div>
 <div class="sources" id="sources"></div>
@@ -368,21 +373,23 @@
   <div class="log" id="log"></div>
 </div>
 
-<div class="foot">Stevenson / Data Pipeline / CLIP ViT-L/14 + LAION Aesthetic</div>
+<div class="foot">Stevenson / Data Pipeline / CLIP ViT-L/14 + LAION Aesthetic + RediSearch KNN</div>
 
 <script>
 let prevScored = null;
+let prevEmbedded = null;
 let logEntries = [];
 
 function fmt(n) { return n != null ? n.toLocaleString() : '--'; }
 
 function render(d) {
   // Hero
+  const vecStatus = d.vec_index_ready ? 'index active' : 'index pending';
   document.getElementById('hero').innerHTML = [
     { n: fmt(d.total_listings), l: 'Total Listings', s: d.sources.craigslist.total + d.sources.ebay.total + ' indexed' },
-    { n: fmt(d.scored_count), l: 'Scored', s: 'CLIP + LAION' },
-    { n: fmt(d.unscored_count), l: 'Unscored', s: 'awaiting scorer' },
-    { n: d.score_pct + '%', l: 'Coverage', s: d.scored_count + '/' + d.total_listings },
+    { n: fmt(d.scored_count), l: 'Scored', s: d.score_pct + '% · CLIP + LAION' },
+    { n: fmt(d.embedded_count), l: 'Embedded', s: d.embed_pct + '% · ' + vecStatus },
+    { n: fmt(d.likes_count), l: 'Likes', s: d.vec_index_ready ? 'FOR YOU ready' : 'awaiting embeddings' },
   ].map(s => `<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
 
   // Progress bar
@@ -397,6 +404,22 @@ function render(d) {
     <div class="progress-meta">
       <span>${isScoring ? 'Scorer active — pushing live' : pct >= 100 ? 'All paintings scored' : 'Scorer idle'}</span>
       <span>Score range: ${d.score_min.toFixed(1)} – ${d.score_max.toFixed(1)} · Median: ${d.median_art_score.toFixed(1)}</span>
+    </div>
+  `;
+
+  // Embedding progress bar
+  const ePct = d.embed_pct;
+  const isEmbedding = prevEmbedded !== null && d.embedded_count > prevEmbedded;
+  const embClass = isEmbedding || (ePct > 0 && ePct < 100) ? ' scoring' : '';
+  const embColor = ePct >= 100 ? 'var(--purple)' : ePct > 50 ? 'var(--teal)' : 'var(--orange)';
+  document.getElementById('embed-progress').innerHTML = `
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill${embClass}" style="width:${ePct}%;background:${embColor}"></div>
+      <div class="progress-bar-text">${ePct}% embedded — ${fmt(d.embedded_count)} of ${fmt(d.scored_count)} scored</div>
+    </div>
+    <div class="progress-meta">
+      <span>${isEmbedding ? 'Embedder active — pushing live' : ePct >= 100 ? 'All scored paintings embedded' : ePct === 0 ? 'Run: stevenson embed' : 'Embedder idle'}</span>
+      <span>${d.vec_index_ready ? 'Vector index: active · KNN ready' : 'Vector index: not created'}</span>
     </div>
   `;
 
@@ -430,8 +453,8 @@ function render(d) {
     <div class="stat-cell"><div class="num">${fmt(d.artists_count)}</div><div class="lbl">Artists Parsed</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.top_rated_count)}</div><div class="lbl">Top Rated (55+)</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.gems_count)}</div><div class="lbl">Gems (Value 8+)</div></div>
-    <div class="stat-cell"><div class="num">${fmt(d.regions)}</div><div class="lbl">Regions</div></div>
-    <div class="stat-cell"><div class="num">${fmt(d.dedup_count)}</div><div class="lbl">Dedup Set</div></div>
+    <div class="stat-cell"><div class="num">${fmt(d.embedded_count)}</div><div class="lbl">Embeddings</div></div>
+    <div class="stat-cell"><div class="num">${fmt(d.likes_count)}</div><div class="lbl">Likes</div></div>
     <div class="stat-cell"><div class="num">$${d.price_median.toLocaleString()}</div><div class="lbl">Median Price</div></div>
   `;
 
@@ -439,20 +462,29 @@ function render(d) {
   document.getElementById('live-ct').textContent = fmt(d.total_listings) + ' listings';
 
   // Activity log
+  const now = new Date();
+  const ts = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+
   if (prevScored !== null && d.scored_count > prevScored) {
     const delta = d.scored_count - prevScored;
-    const now = new Date();
-    const ts = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     logEntries.unshift({
-      ts: ts,
-      src: 'score',
+      ts, src: 'score',
       msg: `<span class="g">+${delta}</span> paintings scored — <span class="n">${fmt(d.scored_count)}</span> total (${d.score_pct}%)`
     });
-    if (logEntries.length > 50) logEntries.length = 50;
   }
 
+  if (prevEmbedded !== null && d.embedded_count > prevEmbedded) {
+    const delta = d.embedded_count - prevEmbedded;
+    logEntries.unshift({
+      ts, src: 'embed',
+      msg: `<span class="g">+${delta}</span> embeddings pushed — <span class="n">${fmt(d.embedded_count)}</span> total (${d.embed_pct}%)`
+    });
+  }
+
+  if (logEntries.length > 50) logEntries.length = 50;
   renderLog();
   prevScored = d.scored_count;
+  prevEmbedded = d.embedded_count;
 }
 
 function renderLog() {
@@ -462,7 +494,7 @@ function renderLog() {
     return;
   }
   el.innerHTML = logEntries.map(e =>
-    `<div class="log-line"><span class="log-ts">${e.ts}</span><span class="log-src">${e.src}</span><span class="log-msg">${e.msg}</span></div>`
+    `<div class="log-line"><span class="log-ts">${e.ts}</span><span class="log-src ${e.src}">${e.src}</span><span class="log-msg">${e.msg}</span></div>`
   ).join('');
 }
 
