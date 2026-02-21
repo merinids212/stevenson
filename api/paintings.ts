@@ -39,13 +39,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Get sorted IDs from the index (cap at 3000 for performance)
   const maxFetch = 3000
-  const ids = order === 'asc'
-    ? await redis.zrange(indexKey, 0, maxFetch - 1)
-    : await redis.zrevrange(indexKey, 0, maxFetch - 1)
+  const [ids, indexTotal] = await Promise.all([
+    order === 'asc'
+      ? redis.zrange(indexKey, 0, maxFetch - 1)
+      : redis.zrevrange(indexKey, 0, maxFetch - 1),
+    redis.zcard(indexKey),
+  ])
 
   if (!ids.length) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')
-    return res.json({ paintings: [], total: 0 })
+    return res.json({ paintings: [], total: 0, totalIndex: 0 })
   }
 
   // Fetch painting fields via pipeline (excludes embedding blob)
@@ -94,5 +97,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   res.setHeader('Cache-Control', 'no-cache')
-  return res.json({ paintings, total })
+  return res.json({ paintings, total, totalIndex: indexTotal })
 }
