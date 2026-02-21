@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>STEVENSON — Taste Map</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="stv-nav.css">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -26,25 +27,7 @@
   }
   #canvas { width: 100%; height: 100%; display: block; }
 
-  /* ── HUD ── */
-  .hud {
-    position: fixed; top: 0; left: 0; right: 0;
-    padding: 12px 16px;
-    padding-top: max(12px, env(safe-area-inset-top, 12px));
-    display: flex; align-items: center; justify-content: space-between;
-    z-index: 10; pointer-events: none;
-  }
-  .hud > * { pointer-events: auto; }
-  .hud-title {
-    font-size: 12px; font-weight: 600;
-    letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--white); text-decoration: none;
-  }
-  .hud-right {
-    display: flex; align-items: center; gap: 12px;
-    font-size: 10px; color: var(--dim);
-  }
-  .hud-stat { letter-spacing: 0.04em; }
+  .hud-stat { letter-spacing: 0.04em; font-size: 10px; color: var(--dim); }
   .hud-stat b { color: var(--white); font-weight: 500; }
 
   /* ── Color mode buttons ── */
@@ -227,9 +210,7 @@
 
   /* ── Mobile ── */
   @media (max-width: 600px) {
-    .hud { padding: 10px 14px; }
-    .hud-title { font-size: 11px; }
-    .hud-right { gap: 8px; font-size: 9px; }
+    .hud-stat { font-size: 9px; }
     .mode-btn { font-size: 8px; padding: 4px 6px; }
     .legend { font-size: 7px; gap: 8px; }
     .legend-dot { width: 5px; height: 5px; }
@@ -245,13 +226,16 @@
   <div id="loading-status"></div>
 </div>
 
-<div class="hud">
-  <a href="/" class="hud-title">STEVENSON</a>
-  <div class="hud-right">
+<nav class="stv-nav" data-stv-theme="floating" data-stv-page="taste">
+  <div class="stv-nav-center">
+    <a class="stv-nav-back" href="/">&#8249;</a>
+    <span class="stv-nav-title">Taste Map</span>
+  </div>
+  <div class="stv-nav-right">
     <span class="hud-stat"><b id="total-count">0</b> paintings</span>
     <span class="hud-stat"><b id="liked-count" style="color:var(--red)">0</b> liked</span>
   </div>
-</div>
+</nav>
 
 <div class="color-modes">
   <button class="mode-btn active" data-mode="score">Score</button>
@@ -724,5 +708,6 @@ function animate() {
 animate()
 loadData()
 </script>
+<script src="stv-nav.js"></script>
 </body>
 </html>

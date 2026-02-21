@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="stv-nav.css">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -225,43 +226,7 @@
     animation: heartBurst 0.7s ease-out forwards;
   }
 
-  /* ─── TOP BAR ─── */
-  .top-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    padding: 12px 20px;
-    padding-top: max(12px, env(safe-area-inset-top, 12px));
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    pointer-events: none;
-  }
-  .top-bar > * { pointer-events: auto; }
-
-  .top-title {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--white);
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-    text-decoration: none;
-  }
-
-  .top-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 11px;
-    color: var(--dim);
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-  }
-
   .heart-count { color: var(--red); font-weight: 500; }
-
 
   /* ─── LOADING ─── */
   .loading-card {
@@ -286,12 +251,15 @@
 </head>
 <body>
 
-<div class="top-bar">
-  <a href="/" class="top-title">STEVENSON</a>
-  <div class="top-right">
+<nav class="stv-nav" data-stv-theme="floating" data-stv-page="feed">
+  <div class="stv-nav-center">
+    <a class="stv-nav-back" href="/">&#8249;</a>
+    <span class="stv-nav-title">Feed</span>
+  </div>
+  <div class="stv-nav-right">
     <span class="heart-count" id="like-count">0</span> liked
   </div>
-</div>
+</nav>
 
 <div id="feed">
   <div class="card loading-card" id="initial-loading">
@@ -619,5 +587,6 @@ function esc(s) {
 
 init()
 </script>
+<script src="stv-nav.js"></script>
 </body>
 </html>

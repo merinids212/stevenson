@@ -132,7 +132,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (artScore < 30) continue
 
     // Blended: taste similarity dominates, quality is a gate + boost
-    const blendedScore = artScore * 0.3 + similarity * 70
+    // Add small jitter so recommendations aren't identical every time
+    const jitter = (Math.random() - 0.5) * 3
+    const blendedScore = artScore * 0.3 + similarity * 70 + jitter
 
     paintings.push({
       ...painting,

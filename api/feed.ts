@@ -5,7 +5,7 @@ import { parsePainting, PAINTING_FIELDS, hmgetToHash } from './_lib/parse'
 const LIKES_KEY = 'stv:likes'
 const DIM = 768
 const DEFAULT_SIZE = 20
-const MAX_SEEN = 300
+const MAX_SEEN = 500
 
 /**
  * Smart feed algorithm with live taste learning.
@@ -348,17 +348,24 @@ async function knnQuery(
 // ─── Quality + explore candidates ───
 
 async function getQualityCandidates(redis: any, excludeSet: Set<string>, size: number): Promise<FeedItem[]> {
-  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 999)
+  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 499)
   const filtered = topIds.filter((id: string) => !excludeSet.has(id))
-  return filtered.slice(0, size).map((id: string) => ({ id, reason: 'quality' as const }))
+
+  // Weighted random sampling: higher-ranked paintings are more likely but not guaranteed
+  const weighted = filtered.map((id: string, i: number) => ({
+    id,
+    key: Math.random() * Math.pow(0.97, i),
+  }))
+  weighted.sort((a, b) => b.key - a.key)
+  return weighted.slice(0, size).map(w => ({ id: w.id, reason: 'quality' as const }))
 }
 
 async function getExploreCandidates(redis: any, excludeSet: Set<string>, size: number): Promise<FeedItem[]> {
   const totalPaintings: number = await redis.zcard('stv:idx:art_score')
   if (totalPaintings === 0) return []
 
-  const midStart = Math.floor(totalPaintings * 0.15)
-  const midEnd = Math.floor(totalPaintings * 0.65)
+  const midStart = Math.floor(totalPaintings * 0.05)
+  const midEnd = Math.floor(totalPaintings * 0.80)
   const midIds: string[] = await redis.zrevrange('stv:idx:art_score', midStart, midEnd)
   const available = midIds.filter(id => !excludeSet.has(id))
 
@@ -406,11 +413,11 @@ function interleave(taste: FeedItem[], quality: FeedItem[], explore: FeedItem[],
       while (ei < explore.length && !add(explore[ei])) ei++
       if (ei < explore.length) ei++
     } else {
-      // Cold start: Q Q Q E
+      // Cold start: Q E Q E — more variety, less top-heavy
       while (qi < quality.length && !add(quality[qi])) qi++
       if (qi < quality.length) qi++
-      while (qi < quality.length && !add(quality[qi])) qi++
-      if (qi < quality.length) qi++
+      while (ei < explore.length && !add(explore[ei])) ei++
+      if (ei < explore.length) ei++
       while (qi < quality.length && !add(quality[qi])) qi++
       if (qi < quality.length) qi++
       while (ei < explore.length && !add(explore[ei])) ei++

@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>STEVENSON</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="stv-nav.css">
 <style>
   *, *::before, *::after {
     box-sizing: border-box;
@@ -16,7 +17,7 @@
   }
 
   :root {
-    --nav-height: 64px;
+    --nav-height: 48px;
     --font: 'IBM Plex Mono', monospace;
     --black: #000;
     --white: #fff;
@@ -47,42 +48,20 @@
   /* ─── SCROLLBAR ─── */
   ::-webkit-scrollbar { width: 0; height: 0; }
 
-  /* ─── NAV ─── */
-  nav {
+  /* ─── FILTER BAR ─── */
+  .nav-filters {
     position: fixed;
-    top: 0;
+    top: calc(48px + env(safe-area-inset-top, 0px));
     left: 0;
     width: 100%;
-    height: var(--nav-height);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     background: var(--white);
-    z-index: 100;
+    z-index: 99;
     transition: opacity var(--transition-speed) var(--ease);
-  }
-
-  nav.hidden {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .nav-title {
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--black);
-    line-height: 1;
-  }
-
-  .nav-filters {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
     justify-content: center;
-    margin-top: 4px;
+    padding: 4px 60px;
   }
 
   .nav-filters button {
@@ -103,143 +82,6 @@
   }
 
   .nav-filters button:hover {
-    color: var(--black);
-  }
-
-  .nav-menu-btn {
-    position: fixed;
-    left: 20px;
-    top: 22px;
-    z-index: 250;
-    background: none;
-    border: none;
-    cursor: pointer;
-    width: 28px;
-    height: 28px;
-    color: var(--black);
-    padding: 0;
-    transition: left 0.4s var(--ease);
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .nav-menu-btn:hover { opacity: 0.5; }
-
-  /* Open: slide to right edge of panel */
-  .nav-menu-btn.open {
-    left: calc(min(320px, 80vw) - 48px);
-  }
-
-  /* Two bars forming + that morphs to − */
-  .nav-menu-btn .bar-h,
-  .nav-menu-btn .bar-v {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 18px; height: 2px;
-    background: currentColor;
-    border-radius: 1px;
-    transform: translate(-50%, -50%);
-    transition: transform 0.35s var(--ease), opacity 0.3s var(--ease);
-  }
-  .nav-menu-btn .bar-v {
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-  .nav-menu-btn.open .bar-v {
-    transform: translate(-50%, -50%) rotate(0deg);
-    opacity: 0;
-  }
-
-  .nav-count {
-    position: absolute;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 11px;
-    color: var(--gray);
-  }
-
-  /* ─── SIDE MENU ─── */
-  .side-menu {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 200;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.35s var(--ease);
-  }
-
-  .side-menu.open {
-    opacity: 1;
-    pointer-events: all;
-  }
-
-  .side-menu-backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.04);
-  }
-
-  .side-menu-panel {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 320px;
-    max-width: 80vw;
-    height: 100%;
-    background: var(--white);
-    padding: 80px 32px 40px;
-    transform: translateX(-100%);
-    transition: transform 0.4s var(--ease);
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .side-menu.open .side-menu-panel {
-    transform: translateX(0);
-  }
-
-  .side-menu-link {
-    font-family: var(--font);
-    font-size: 13px;
-    font-weight: 400;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--black);
-    text-decoration: none;
-    padding: 14px 0;
-    border-bottom: 1px solid #f0f0f0;
-    transition: opacity 0.2s;
-    display: block;
-  }
-
-  .side-menu-link:hover {
-    opacity: 0.5;
-  }
-
-  .side-menu-footer {
-    margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .side-menu-footer a {
-    font-family: var(--font);
-    font-size: 11px;
-    color: var(--gray);
-    text-decoration: none;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    transition: color 0.2s;
-  }
-
-  .side-menu-footer a:hover {
     color: var(--black);
   }
 
@@ -267,7 +109,7 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-top: var(--nav-height);
+    padding-top: calc(48px + 30px + env(safe-area-inset-top, 0px));
     transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
   }
 
@@ -288,27 +130,19 @@
     .grid { grid-template-columns: repeat(4, 1fr); }
   }
   @media (max-width: 600px) {
-    :root { --nav-height: 52px; }
     .grid { grid-template-columns: repeat(3, 1fr); }
 
-    .nav-title { font-size: 11px; letter-spacing: 0.08em; }
     .nav-filters {
       flex-wrap: nowrap;
       overflow-x: auto;
       gap: 10px;
-      margin-top: 2px;
-      max-width: calc(100vw - 90px);
+      padding: 4px 50px;
     }
     .nav-filters button {
       font-size: 9px;
       flex-shrink: 0;
       white-space: nowrap;
     }
-
-    .nav-menu-btn { left: 12px; top: 16px; }
-    .nav-menu-btn .bar-h, .nav-menu-btn .bar-v { width: 16px; }
-    .nav-menu-btn.open { left: calc(min(320px, 80vw) - 40px); }
-    .nav-count { right: 12px; font-size: 10px; }
 
     .grid-item { padding: 4px 2px 6px; }
     .grid-item-title { font-size: 9px; margin-top: 4px; }
@@ -772,40 +606,23 @@
 <body>
 
 <div id="app">
-  <!-- SIDE MENU -->
-  <div class="side-menu" id="side-menu">
-    <div class="side-menu-backdrop" onclick="toggleMenu()"></div>
-    <div class="side-menu-panel">
-      <a class="side-menu-link" href="#" onclick="toggleMenu(); goHome(); return false;">Gallery</a>
-      <a class="side-menu-link" href="feed.html">Feed</a>
-      <a class="side-menu-link" href="taste.html">Taste Map</a>
-      <a class="side-menu-link" href="analytics.html">Analytics</a>
-      <a class="side-menu-link" href="data.html">Data</a>
-      <a class="side-menu-link" href="about.html">About</a>
-      <a class="side-menu-link" href="#" onclick="toggleMenu(); return false;">Contact</a>
-      <div class="side-menu-footer">
-        <a href="#">Terms</a>
-        <a href="#">Privacy</a>
-      </div>
-    </div>
-  </div>
-
   <!-- NAV -->
-  <nav id="main-nav">
-    <button class="nav-menu-btn" id="menu-btn" onclick="toggleMenu()" aria-label="Menu"><span class="bar-h"></span><span class="bar-v"></span></button>
-    <div class="nav-title">STEVENSON</div>
-    <div class="nav-filters" id="price-filters">
-      <button class="active" data-price="all">ALL</button>
-      <button data-price="under50">&lt;$50</button>
-      <button data-price="50to200">$50–200</button>
-      <button data-price="200to1000">$200–1K</button>
-      <button data-price="over1000">$1K+</button>
-      <button data-price="best">BEST</button>
-      <button data-price="gems">GEMS</button>
-      <button data-price="foryou" style="display:none;">FOR YOU</button>
-    </div>
-    <span class="nav-count" id="nav-count"></span>
+  <nav class="stv-nav" data-stv-theme="light" data-stv-page="gallery" id="main-nav">
+    <span class="stv-nav-title">STEVENSON</span>
+    <span class="stv-nav-right" id="nav-count"></span>
   </nav>
+
+  <!-- FILTER BAR -->
+  <div class="nav-filters" id="price-filters">
+    <button class="active" data-price="all">ALL</button>
+    <button data-price="under50">&lt;$50</button>
+    <button data-price="50to200">$50–200</button>
+    <button data-price="200to1000">$200–1K</button>
+    <button data-price="over1000">$1K+</button>
+    <button data-price="best">BEST</button>
+    <button data-price="gems">GEMS</button>
+    <button data-price="foryou" style="display:none;">FOR YOU</button>
+  </div>
 
   <!-- GRID -->
   <div id="grid-view">
@@ -1083,7 +900,9 @@
 
     // Dim grid
     document.getElementById('grid-view').classList.add('dimmed');
-    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('stv-nav--hidden');
+    document.getElementById('price-filters').classList.add('stv-nav--hidden');
+    if (window.stvMenuBtn) window.stvMenuBtn.classList.add('stv-menu-btn--hidden');
     document.getElementById('neighbor-nav').classList.add('active');
 
     if (thumbRect) {
@@ -1190,7 +1009,9 @@
 
     // Undim grid
     document.getElementById('grid-view').classList.remove('dimmed');
-    document.getElementById('main-nav').classList.remove('hidden');
+    document.getElementById('main-nav').classList.remove('stv-nav--hidden');
+    document.getElementById('price-filters').classList.remove('stv-nav--hidden');
+    if (window.stvMenuBtn) window.stvMenuBtn.classList.remove('stv-menu-btn--hidden');
     document.getElementById('neighbor-nav').classList.remove('active');
 
     if (targetRect) {
@@ -1337,11 +1158,6 @@
     });
   }
 
-  // Side menu
-  function toggleMenu() {
-    document.getElementById('side-menu').classList.toggle('open');
-    document.getElementById('menu-btn').classList.toggle('open');
-  }
 
   // Permalink
   function checkPermalink() {
@@ -1399,9 +1215,7 @@
   // Keyboard nav
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (document.getElementById('side-menu').classList.contains('open')) {
-        toggleMenu();
-      } else if (document.getElementById('detail-view').classList.contains('active')) {
+      if (document.getElementById('detail-view').classList.contains('active')) {
         closeDetail();
       }
     }
@@ -1524,6 +1338,6 @@
   // Load likes on startup
   fetchLikes();
 </script>
-
+<script src="stv-nav.js"></script>
 </body>
 </html>

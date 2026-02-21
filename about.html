@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>STEVENSON — About</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="stv-nav.css">
 <style>
   *, *::before, *::after {
     box-sizing: border-box;
@@ -16,7 +17,6 @@
   }
 
   :root {
-    --nav-height: 64px;
     --font: 'IBM Plex Mono', monospace;
     --black: #000;
     --white: #fff;
@@ -34,47 +34,10 @@
 
   ::-webkit-scrollbar { width: 0; height: 0; }
 
-  nav {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: var(--nav-height);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--white);
-    z-index: 100;
-  }
-
-  .nav-back {
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 22px;
-    color: var(--black);
-    padding: 4px;
-    text-decoration: none;
-    transition: opacity 0.2s;
-  }
-
-  .nav-back:hover { opacity: 0.5; }
-
-  .nav-title {
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
   .about-content {
     max-width: 560px;
     margin: 0 auto;
-    padding: calc(var(--nav-height) + 60px) 24px 80px;
+    padding: calc(48px + env(safe-area-inset-top, 0px) + 60px) 24px 80px;
   }
 
   .about-content h1 {
@@ -125,9 +88,11 @@
 </head>
 <body>
 
-<nav>
-  <a class="nav-back" href="index.html">&#8249;</a>
-  <span class="nav-title">About</span>
+<nav class="stv-nav" data-stv-theme="light" data-stv-page="about">
+  <div class="stv-nav-center">
+    <a class="stv-nav-back" href="/">&#8249;</a>
+    <span class="stv-nav-title">About</span>
+  </div>
 </nav>
 
 <div class="about-content">
@@ -256,6 +221,6 @@
       });
     });
 </script>
-
+<script src="stv-nav.js"></script>
 </body>
 </html>
