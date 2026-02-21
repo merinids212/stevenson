@@ -124,28 +124,15 @@
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
 
-  .card-badges {
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-  }
-
-  .badge {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.12);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+  .card-score {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
     color: var(--dim);
-    text-shadow: none;
+    margin-top: 5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
-  .badge.taste { color: #a78bfa; background: rgba(167,139,250,0.15); }
-  .badge.quality { color: #fbbf24; background: rgba(251,191,36,0.15); }
-  .badge.explore { color: #34d399; background: rgba(52,211,153,0.15); }
 
   /* ─── ACTIONS ─── */
   .card-actions {
@@ -258,15 +245,6 @@
 
   .heart-count { color: var(--red); font-weight: 500; }
 
-  .strategy-pill {
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.1);
-    backdrop-filter: blur(8px);
-  }
 
   /* ─── LOADING ─── */
   .loading-card {
@@ -295,7 +273,6 @@
   <a href="/" class="top-title">STEVENSON</a>
   <div class="top-right">
     <span class="heart-count" id="like-count">0</span> liked
-    <span id="strategy-pill" class="strategy-pill" style="display:none"></span>
   </div>
 </div>
 
@@ -349,21 +326,6 @@ async function fetchBatch(size) {
     likedSet = new Set(data.liked || [])
     updateLikeCount()
 
-    // Show strategy
-    if (data.meta) {
-      const pill = document.getElementById('strategy-pill')
-      if (data.meta.strategy === 'poles') {
-        pill.textContent = `${data.meta.poles} taste poles`
-        pill.style.display = ''
-      } else if (data.meta.strategy === 'simple') {
-        pill.textContent = 'learning'
-        pill.style.display = ''
-      } else {
-        pill.textContent = 'discover'
-        pill.style.display = ''
-      }
-    }
-
     const newPaintings = data.paintings || []
     if (!newPaintings.length && !paintings.length) {
       document.getElementById('feed').innerHTML =
@@ -410,9 +372,6 @@ function renderCards(newPaintings, startIdx) {
     const location = p.location || p.region || ''
     const artist = p.artist || ''
     const meta = [artist, price, location].filter(Boolean).join(' · ')
-    const score = p.art_score ? Math.round(p.art_score) : ''
-    const reason = p._reason || ''
-
     const card = document.createElement('div')
     card.className = 'card'
     card.dataset.idx = idx
@@ -425,10 +384,6 @@ function renderCards(newPaintings, startIdx) {
       <div class="card-info">
         <div class="card-title">${esc(p.title || 'Untitled')}</div>
         ${meta ? `<div class="card-meta">${esc(meta)}</div>` : ''}
-        <div class="card-badges">
-          ${score ? `<span class="badge">${score}</span>` : ''}
-          ${reason ? `<span class="badge ${reason}">${reason}</span>` : ''}
-        </div>
       </div>
       <div class="card-actions">
         <button class="action-btn like-btn${isLiked ? ' liked' : ''}" data-idx="${idx}" aria-label="Like">
