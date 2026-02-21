@@ -55,6 +55,7 @@
     width: 100%;
     height: var(--nav-height);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     background: var(--white);
@@ -67,11 +68,13 @@
     pointer-events: none;
   }
 
-  .nav-center {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
+  .nav-title {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--black);
+    line-height: 1;
   }
 
   .nav-filters {
@@ -79,11 +82,12 @@
     gap: 14px;
     flex-wrap: wrap;
     justify-content: center;
+    margin-top: 4px;
   }
 
   .nav-filters button {
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.02em;
     background: none;
     border: none;
@@ -130,7 +134,7 @@
     right: 20px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--gray);
   }
 
@@ -265,33 +269,29 @@
     .grid { grid-template-columns: repeat(4, 1fr); }
   }
   @media (max-width: 600px) {
-    :root { --nav-height: 48px; }
+    :root { --nav-height: 52px; }
     .grid { grid-template-columns: repeat(3, 1fr); }
 
-    /* Filter rows: horizontal scroll instead of wrap */
+    .nav-title { font-size: 11px; letter-spacing: 0.08em; }
     .nav-filters {
       flex-wrap: nowrap;
       overflow-x: auto;
       gap: 10px;
+      margin-top: 2px;
+      max-width: calc(100vw - 90px);
     }
     .nav-filters button {
-      font-size: 10px;
+      font-size: 9px;
       flex-shrink: 0;
       white-space: nowrap;
     }
-    .nav-center {
-      max-width: calc(100% - 72px);
-    }
 
-    /* Menu button + count: pull in */
-    .nav-menu-btn { left: 12px; font-size: 18px; }
-    .nav-count { right: 12px; font-size: 11px; }
+    .nav-menu-btn { left: 12px; font-size: 16px; }
+    .nav-count { right: 12px; font-size: 10px; }
 
-    /* Grid items: tighter */
     .grid-item { padding: 4px 2px 6px; }
     .grid-item-title { font-size: 9px; margin-top: 4px; }
 
-    /* Detail view: compact */
     .detail-image-area { padding: 12px 40px; }
     .detail-info { padding: 12px 16px 32px; }
     .arrow { font-size: 22px; padding: 10px; }
@@ -301,9 +301,8 @@
   @media (max-width: 400px) {
     .grid { grid-template-columns: repeat(2, 1fr); }
 
-    /* Extra tight for small screens */
     .nav-filters { gap: 8px; }
-    .nav-filters button { font-size: 9px; letter-spacing: 0; }
+    .nav-filters button { font-size: 8px; letter-spacing: 0; }
     .grid-item { padding: 3px 2px 5px; }
     .grid-item-title { font-size: 8px; }
   }
@@ -699,16 +698,15 @@
   <!-- NAV -->
   <nav id="main-nav">
     <button class="nav-menu-btn" id="menu-btn" onclick="toggleMenu()" aria-label="Menu">+</button>
-    <div class="nav-center">
-      <div class="nav-filters" id="price-filters">
-        <button class="active" data-price="all">ALL PRICES</button>
-        <button data-price="under50">UNDER $50</button>
-        <button data-price="50to200">$50 - $200</button>
-        <button data-price="200to1000">$200 - $1K</button>
-        <button data-price="over1000">$1K+</button>
-        <button data-price="best" style="margin-left:8px">BEST</button>
-        <button data-price="gems">GEMS</button>
-      </div>
+    <div class="nav-title">STEVENSON</div>
+    <div class="nav-filters" id="price-filters">
+      <button class="active" data-price="all">ALL</button>
+      <button data-price="under50">&lt;$50</button>
+      <button data-price="50to200">$50–200</button>
+      <button data-price="200to1000">$200–1K</button>
+      <button data-price="over1000">$1K+</button>
+      <button data-price="best">BEST</button>
+      <button data-price="gems">GEMS</button>
     </div>
     <span class="nav-count" id="nav-count"></span>
   </nav>
@@ -798,25 +796,40 @@
     suppressHashChange = false;
   }
 
-  // Load paintings — first page fast, then rest in background
-  fetch('/api/paintings?limit=120')
-    .then(r => r.json())
-    .then(data => {
-      paintings = data.paintings.filter(p => p.images && p.images.length > 0);
-      filtered = [...paintings];
-      renderGrid();
-      checkPermalink();
+  // Build API URL from current filter
+  function buildApiUrl() {
+    let url = '/api/paintings?';
+    const params = [];
+    if (currentPrice === 'under50') { params.push('max_price=50'); }
+    else if (currentPrice === '50to200') { params.push('min_price=50', 'max_price=200'); }
+    else if (currentPrice === '200to1000') { params.push('min_price=200', 'max_price=1000'); }
+    else if (currentPrice === 'over1000') { params.push('min_price=1000'); }
+    else if (currentPrice === 'best') { params.push('filter=best', 'sort=art_score'); }
+    else if (currentPrice === 'gems') { params.push('filter=gems', 'sort=value_score'); }
+    return url + params.join('&');
+  }
 
-      // Load remaining in background if more exist
-      if (data.total > paintings.length) {
-        fetch('/api/paintings')
-          .then(r => r.json())
-          .then(all => {
-            paintings = all.paintings.filter(p => p.images && p.images.length > 0);
-            applyFilters();
-          });
-      }
-    });
+  // Fetch paintings from API with current filters
+  let fetchController = null;
+  function fetchPaintings() {
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+    const url = buildApiUrl();
+
+    fetch(url, { signal: fetchController.signal })
+      .then(r => r.json())
+      .then(data => {
+        paintings = data.paintings.filter(p => p.images && p.images.length > 0);
+        filtered = [...paintings];
+        document.getElementById('nav-count').textContent = filtered.length;
+        renderGrid();
+        if (window.location.hash) checkPermalink();
+      })
+      .catch(e => { if (e.name !== 'AbortError') console.error(e); });
+  }
+
+  // Initial load
+  fetchPaintings();
 
   // Shorten title for grid
   function shortTitle(title) {
@@ -825,25 +838,9 @@
     return clean;
   }
 
-  // Apply price filters
+  // Apply price filters — fetches from API with server-side filtering
   function applyFilters() {
-    filtered = paintings.filter(p => {
-      switch (currentPrice) {
-        case 'under50': return p.price !== null && p.price < 50;
-        case '50to200': return p.price !== null && p.price >= 50 && p.price <= 200;
-        case '200to1000': return p.price !== null && p.price > 200 && p.price <= 1000;
-        case 'over1000': return p.price !== null && p.price > 1000;
-        case 'best': return p.art_score != null;
-        case 'gems': return p.value_score != null;
-        default: return true;
-      }
-    });
-    if (currentPrice === 'best') {
-      filtered.sort((a, b) => (b.art_score || 0) - (a.art_score || 0));
-    } else if (currentPrice === 'gems') {
-      filtered.sort((a, b) => (b.value_score || 0) - (a.value_score || 0));
-    }
-    renderGrid();
+    fetchPaintings();
   }
 
   // Price filter click handlers
