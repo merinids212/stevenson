@@ -771,10 +771,10 @@
   }
 
   // Load paintings
-  fetch('paintings.json')
+  fetch('/api/paintings')
     .then(r => r.json())
     .then(data => {
-      paintings = data.filter(p => p.images && p.images.length > 0);
+      paintings = data.paintings.filter(p => p.images && p.images.length > 0);
       filtered = [...paintings];
       renderGrid();
       checkPermalink();

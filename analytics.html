@@ -782,31 +782,25 @@ Chart.defaults.plugins.legend.display=false;
 let all=[],exp=[],pg=0,sort={key:'art_score',dir:-1};
 const PS=40;
 
-fetch('paintings.json').then(r=>r.json()).then(d=>{
-  all=d.filter(p=>p.images&&p.images.length>0).map(p=>({...p,tags:classify(p.title)}));
-  deals(all);
-  document.getElementById('live-ct').textContent=all.length.toLocaleString()+' listings';
-  hero();charts();filter('all');
+// Phase 1: Hero stats (fast, small payload)
+fetch('/api/stats').then(r=>r.json()).then(s=>{
+  document.getElementById('hero').innerHTML=[
+    {n:parseInt(s.total_listings).toLocaleString(),l:'Listings',s:'California'},
+    {n:s.regions,l:'Regions',s:'CL markets'},
+    {n:'$'+parseFloat(s.price_median).toLocaleString(),l:'Med. Price',s:'$'+parseFloat(s.price_min)+'–$'+parseFloat(s.price_max).toLocaleString()},
+    {n:parseFloat(s.median_art_score).toFixed(1),l:'Art Score',s:s.scored_count+' CLIP+LAION scored'},
+    {n:s.top_rated_count,l:'Top Rated',s:'Score 55+'},
+    {n:s.gems_count,l:'Gems',s:'Value 8+'},
+  ].map(s=>`<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
 });
 
-function hero(){
-  const pr=all.filter(p=>p.price).map(p=>p.price).sort((a,b)=>a-b);
-  const sc=all.filter(p=>p.art_score!=null).map(p=>p.art_score).sort((a,b)=>a-b);
-  const rg=new Set(all.map(p=>p.region));
-  const tp=all.filter(p=>p.art_score>=55);
-  const gems=all.filter(p=>p.value_score!=null&&p.value_score>=8);
-  const artists=all.filter(p=>p.artist);
-  const md=pr.length?pr[Math.floor(pr.length/2)]:0;
-  const ma=sc.length?sc[Math.floor(sc.length/2)]:0;
-  document.getElementById('hero').innerHTML=[
-    {n:all.length.toLocaleString(),l:'Listings',s:'California'},
-    {n:rg.size,l:'Regions',s:'CL markets'},
-    {n:'$'+md.toLocaleString(),l:'Med. Price',s:'$'+Math.min(...pr)+'–$'+Math.max(...pr).toLocaleString()},
-    {n:ma.toFixed(1),l:'Art Score',s:sc.length+' CLIP+LAION scored'},
-    {n:tp.length,l:'Top Rated',s:'Score 55+'},
-    {n:gems.length,l:'Gems',s:'Value 8+'},
-  ].map(s=>`<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
-}
+// Phase 2: Full data for charts + explorer
+fetch('/api/paintings').then(r=>r.json()).then(d=>{
+  all=d.paintings.filter(p=>p.images&&p.images.length>0).map(p=>({...p,tags:classify(p.title)}));
+  deals(all);
+  document.getElementById('live-ct').textContent=all.length.toLocaleString()+' listings';
+  charts();filter('all');
+});
 
 function charts(){
   // Art score distribution

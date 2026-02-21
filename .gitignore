@@ -4,8 +4,14 @@ __pycache__/
 .env
 thumbs/
 *.pth
+node_modules/
 
-# Keep paintings.json for the site, ignore other JSON
+# JSON: allow config + data, ignore the rest
 *.json
 !paintings.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!vercel.json
 .vercel
+.env*.local

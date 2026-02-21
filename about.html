@@ -197,26 +197,16 @@
 </div>
 
 <script>
-  fetch('paintings.json')
+  fetch('/api/stats')
     .then(r => r.json())
-    .then(data => {
-      const paintings = data.filter(p => p.images && p.images.length > 0);
-      const regions = new Set(paintings.map(p => p.region));
-      const priced = paintings.filter(p => p.price !== null);
-      const prices = priced.map(p => p.price);
-      const median = prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)];
-
-      const scored = paintings.filter(p => p.art_score != null);
-      const artists = paintings.filter(p => p.artist);
-      const gems = paintings.filter(p => p.value_score != null);
-
+    .then(s => {
       const stats = [
-        ['Listings', paintings.length.toLocaleString()],
-        ['Regions', regions.size],
-        ['Price range', `$${Math.min(...prices).toLocaleString()} — $${Math.max(...prices).toLocaleString()}`],
-        ['Median price', `$${median.toLocaleString()}`],
-        ['CLIP scored', scored.length.toLocaleString()],
-        ['Artists parsed', artists.length.toLocaleString()],
+        ['Listings', parseInt(s.total_listings).toLocaleString()],
+        ['Regions', s.regions],
+        ['Price range', `$${parseFloat(s.price_min).toLocaleString()} — $${parseFloat(s.price_max).toLocaleString()}`],
+        ['Median price', `$${parseFloat(s.price_median).toLocaleString()}`],
+        ['CLIP scored', parseInt(s.scored_count).toLocaleString()],
+        ['Artists parsed', parseInt(s.artists_count).toLocaleString()],
         ['Model', 'ViT-L/14 + LAION MLP'],
       ];
 
