@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>STEVENSON — Feed</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font: 'IBM Plex Mono', monospace;
+    --black: #0a0a0a;
+    --white: #fff;
+    --gray: #888;
+    --red: #e53e3e;
+    --card-gap: 0px;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font);
+    background: var(--black);
+    color: var(--white);
+    -webkit-font-smoothing: antialiased;
+    touch-action: none;
+  }
+
+  /* ─── FEED CONTAINER (scroll-snap) ─── */
+  #feed {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  #feed::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* ─── CARD ─── */
+  .card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--black);
+  }
+
+  .card-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    z-index: 1;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* soft vignette for text readability */
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(0,0,0,0.7) 0%,
+      rgba(0,0,0,0.0) 35%,
+      rgba(0,0,0,0.0) 75%,
+      rgba(0,0,0,0.35) 100%
+    );
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ─── CARD INFO (bottom overlay) ─── */
+  .card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 80px;
+    padding: 24px 20px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+    z-index: 3;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    color: var(--white);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-meta {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+
+  .card-score {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── SIDE ACTIONS ─── */
+  .card-actions {
+    position: absolute;
+    right: 16px;
+    bottom: 100px;
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--white);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .action-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .action-label {
+    font-family: var(--font);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.7);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+
+  .action-btn.liked .action-icon {
+    color: var(--red);
+    transform: scale(1.1);
+  }
+
+  .action-btn.liked .action-label {
+    color: var(--red);
+  }
+
+  /* heart pop animation */
+  @keyframes heartPop {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.4); }
+    60% { transform: scale(0.95); }
+    100% { transform: scale(1.1); }
+  }
+
+  .action-btn.pop .action-icon {
+    animation: heartPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* double-tap heart burst */
+  @keyframes heartBurst {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
+    40% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+  }
+
+  .heart-burst {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-size: 80px;
+    z-index: 10;
+    pointer-events: none;
+    animation: heartBurst 0.7s ease-out forwards;
+  }
+
+  /* ─── TOP BAR ─── */
+  .top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 20px;
+    padding-top: max(12px, env(safe-area-inset-top, 12px));
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .top-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--white);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    text-decoration: none;
+  }
+
+  .top-stats {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+
+  .top-stats .heart-count {
+    color: var(--red);
+    font-weight: 500;
+  }
+
+  /* ─── PROGRESS DOTS ─── */
+  .progress-bar {
+    position: fixed;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    pointer-events: none;
+  }
+
+  .progress-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.2s, transform 0.2s;
+  }
+
+  .progress-dot.active {
+    background: var(--white);
+    transform: scale(1.5);
+  }
+
+  .progress-dot.liked {
+    background: var(--red);
+  }
+
+  /* ─── LOADING ─── */
+  .loading-state {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--gray);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .loading-state .dot {
+    width: 6px; height: 6px;
+    background: var(--white);
+    border-radius: 50%;
+    animation: pulse 1.2s infinite;
+  }
+
+  /* ─── EMPTY STATE ─── */
+  .empty-state {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--gray);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── END CARD ─── */
+  .end-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--gray);
+  }
+
+  .end-card .stat {
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--white);
+    line-height: 1;
+  }
+
+  .end-card .stat-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray);
+  }
+
+  .end-card .reload-btn {
+    margin-top: 16px;
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--white);
+    color: var(--black);
+    border: none;
+    padding: 10px 24px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .end-card .reload-btn:hover { opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a href="/" class="top-title">STEVENSON</a>
+  <div class="top-stats">
+    <span class="heart-count" id="like-count">0</span> liked
+    <span style="margin-left: 8px; opacity: 0.5" id="position-label">1 / —</span>
+  </div>
+</div>
+
+<div id="progress" class="progress-bar"></div>
+
+<div id="feed">
+  <div class="loading-state" id="loading">
+    <div class="dot"></div>
+    <div>Loading feed</div>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://${window.location.host}` : ''
+
+let paintings = []
+let likedSet = new Set()
+let currentIndex = 0
+let lastTap = 0
+
+async function init() {
+  try {
+    const res = await fetch(`${API}/api/feed`)
+    const data = await res.json()
+    paintings = data.paintings || []
+    likedSet = new Set(data.liked || [])
+    updateLikeCount()
+
+    if (!paintings.length) {
+      document.getElementById('feed').innerHTML =
+        '<div class="empty-state"><div>No paintings yet</div><div style="font-size:10px; margin-top:4px">Embeddings may still be processing</div></div>'
+      return
+    }
+
+    renderFeed()
+    buildProgress()
+    setupScroll()
+    setupKeys()
+  } catch (e) {
+    console.error('Feed load failed:', e)
+    document.getElementById('feed').innerHTML =
+      '<div class="empty-state"><div>Failed to load feed</div></div>'
+  }
+}
+
+function renderFeed() {
+  const feed = document.getElementById('feed')
+  feed.innerHTML = ''
+
+  for (let i = 0; i < paintings.length; i++) {
+    const p = paintings[i]
+    const imgUrl = p.images && p.images[0] ? p.images[0] : ''
+    const isLiked = likedSet.has(p.id)
+    const price = p.price ? `$${Math.round(p.price)}` : ''
+    const location = p.location || p.region || ''
+    const artist = p.artist || ''
+    const meta = [artist, price, location].filter(Boolean).join(' · ')
+    const score = p.art_score ? Math.round(p.art_score) : ''
+
+    const card = document.createElement('div')
+    card.className = 'card'
+    card.dataset.index = i
+    card.dataset.id = p.id
+    card.innerHTML = `
+      ${imgUrl ? `<img class="card-img" src="${imgUrl}" alt="" loading="${i < 3 ? 'eager' : 'lazy'}" draggable="false">` : ''}
+      <div class="card-info">
+        <div class="card-title">${esc(p.title || 'Untitled')}</div>
+        ${meta ? `<div class="card-meta">${esc(meta)}</div>` : ''}
+        ${score ? `<div class="card-score">${score}</div>` : ''}
+      </div>
+      <div class="card-actions">
+        <button class="action-btn${isLiked ? ' liked' : ''}" onclick="toggleLike(${i})" aria-label="Like">
+          <span class="action-icon">${isLiked ? '&#9829;' : '&#9825;'}</span>
+          <span class="action-label">like</span>
+        </button>
+        <button class="action-btn" onclick="openListing(${i})" aria-label="View listing">
+          <span class="action-icon" style="font-size:22px">&#8599;</span>
+          <span class="action-label">view</span>
+        </button>
+      </div>
+    `
+
+    // double-tap to like
+    card.addEventListener('dblclick', (e) => {
+      e.preventDefault()
+      if (!likedSet.has(p.id)) toggleLike(i)
+      showHeartBurst(card)
+    })
+
+    feed.appendChild(card)
+  }
+
+  // End card
+  const endCard = document.createElement('div')
+  endCard.className = 'card end-card'
+  endCard.innerHTML = `
+    <div class="stat" id="end-liked-count">${likedSet.size}</div>
+    <div class="stat-label">paintings liked</div>
+    <button class="reload-btn" onclick="location.reload()">Load more</button>
+  `
+  feed.appendChild(endCard)
+}
+
+function buildProgress() {
+  const bar = document.getElementById('progress')
+  // Only show dots for <= 30 items
+  if (paintings.length > 30) {
+    bar.style.display = 'none'
+    return
+  }
+  bar.innerHTML = ''
+  for (let i = 0; i < paintings.length; i++) {
+    const dot = document.createElement('div')
+    dot.className = 'progress-dot' + (i === 0 ? ' active' : '') +
+      (likedSet.has(paintings[i].id) ? ' liked' : '')
+    bar.appendChild(dot)
+  }
+}
+
+function updateProgress() {
+  const dots = document.querySelectorAll('.progress-dot')
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === currentIndex)
+    d.classList.toggle('liked', paintings[i] && likedSet.has(paintings[i].id))
+  })
+}
+
+function setupScroll() {
+  const feed = document.getElementById('feed')
+  let scrollTimer
+  feed.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer)
+    scrollTimer = setTimeout(() => {
+      const idx = Math.round(feed.scrollTop / window.innerHeight)
+      if (idx !== currentIndex && idx < paintings.length) {
+        currentIndex = idx
+        updateProgress()
+        updatePosition()
+      }
+    }, 80)
+  }, { passive: true })
+}
+
+function setupKeys() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'j') {
+      e.preventDefault()
+      goNext()
+    } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      e.preventDefault()
+      goPrev()
+    } else if (e.key === 'l' || e.key === 'L') {
+      toggleLike(currentIndex)
+    } else if (e.key === 'Enter' || e.key === 'o') {
+      openListing(currentIndex)
+    }
+  })
+}
+
+function goNext() {
+  const feed = document.getElementById('feed')
+  const maxIdx = paintings.length // +1 for end card
+  if (currentIndex < maxIdx) {
+    currentIndex++
+    feed.children[currentIndex]?.scrollIntoView({ behavior: 'smooth' })
+    updateProgress()
+    updatePosition()
+  }
+}
+
+function goPrev() {
+  const feed = document.getElementById('feed')
+  if (currentIndex > 0) {
+    currentIndex--
+    feed.children[currentIndex]?.scrollIntoView({ behavior: 'smooth' })
+    updateProgress()
+    updatePosition()
+  }
+}
+
+async function toggleLike(idx) {
+  const p = paintings[idx]
+  if (!p) return
+  const isLiked = likedSet.has(p.id)
+  const nowLiked = !isLiked
+
+  // Optimistic update
+  if (nowLiked) likedSet.add(p.id)
+  else likedSet.delete(p.id)
+
+  updateCard(idx, nowLiked)
+  updateLikeCount()
+  updateProgress()
+
+  // Persist to Redis
+  try {
+    await fetch(`${API}/api/like`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, liked: nowLiked })
+    })
+  } catch (e) {
+    // Revert on failure
+    if (nowLiked) likedSet.delete(p.id)
+    else likedSet.add(p.id)
+    updateCard(idx, !nowLiked)
+    updateLikeCount()
+    updateProgress()
+  }
+}
+
+function updateCard(idx, liked) {
+  const card = document.querySelectorAll('.card')[idx]
+  if (!card) return
+  const btn = card.querySelector('.action-btn')
+  if (!btn) return
+
+  btn.classList.toggle('liked', liked)
+  btn.classList.add('pop')
+  setTimeout(() => btn.classList.remove('pop'), 400)
+  btn.querySelector('.action-icon').innerHTML = liked ? '&#9829;' : '&#9825;'
+}
+
+function showHeartBurst(card) {
+  const heart = document.createElement('div')
+  heart.className = 'heart-burst'
+  heart.innerHTML = '&#9829;'
+  heart.style.color = 'var(--red)'
+  card.appendChild(heart)
+  setTimeout(() => heart.remove(), 700)
+}
+
+function openListing(idx) {
+  const p = paintings[idx]
+  if (p && p.url) window.open(p.url, '_blank')
+}
+
+function updateLikeCount() {
+  document.getElementById('like-count').textContent = likedSet.size
+  const endEl = document.getElementById('end-liked-count')
+  if (endEl) endEl.textContent = likedSet.size
+}
+
+function updatePosition() {
+  const pos = document.getElementById('position-label')
+  if (currentIndex < paintings.length) {
+    pos.textContent = `${currentIndex + 1} / ${paintings.length}`
+  } else {
+    pos.textContent = 'end'
+  }
+}
+
+function esc(s) {
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
+}
+
+init()
+</script>
+</body>
+</html>
