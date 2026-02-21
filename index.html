@@ -439,40 +439,38 @@
     color: var(--white);
   }
 
-  /* ─── EXPAND BUTTON ─── */
+  /* ─── EXPAND TOGGLE ─── */
   .expand-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    margin: 4px auto 0;
+    display: inline-block;
+    margin: 8px auto 0;
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 20px;
+    font-family: var(--font);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--light-gray);
-    transition: color 0.2s, transform 0.3s var(--ease);
+    padding: 6px 0;
+    transition: color 0.2s;
   }
 
   .expand-btn:hover {
     color: var(--black);
   }
 
-  .expand-btn.open {
-    transform: rotate(45deg);
-  }
-
   .detail-extra {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.4s var(--ease), opacity 0.3s;
+    transition: max-height 0.4s var(--ease), opacity 0.3s, margin 0.4s var(--ease);
     opacity: 0;
+    margin-top: 0;
   }
 
   .detail-extra.open {
     max-height: 260px;
     opacity: 1;
+    margin-top: 12px;
   }
 
   /* ─── NEIGHBOR NAV ─── */
@@ -708,7 +706,7 @@
       <div class="detail-info">
         <div class="detail-title" id="detail-title"></div>
         <div class="detail-price" id="detail-price"></div>
-        <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+</button>
+        <button class="expand-btn" id="expand-btn" onclick="toggleExtra()">+ Info</button>
         <div class="detail-extra" id="detail-extra">
           <div class="detail-artist" id="detail-artist"></div>
           <div class="detail-score" id="detail-score"></div>
@@ -914,7 +912,7 @@
     }
 
     // Reset expand
-    document.getElementById('expand-btn').classList.remove('open');
+    document.getElementById('expand-btn').textContent = '+ Info';
     document.getElementById('detail-extra').classList.remove('open');
 
     // Set image with load transition
@@ -1191,8 +1189,10 @@
 
   // Expand extra info
   function toggleExtra() {
-    document.getElementById('expand-btn').classList.toggle('open');
-    document.getElementById('detail-extra').classList.toggle('open');
+    const btn = document.getElementById('expand-btn');
+    const extra = document.getElementById('detail-extra');
+    const isOpen = extra.classList.toggle('open');
+    btn.textContent = isOpen ? '\u2212 Info' : '+ Info';
   }
 
   // Go home
