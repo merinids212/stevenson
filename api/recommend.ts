@@ -66,11 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     knnResults = await (redis as any).call(
       'FT.SEARCH', 'stv:vec_idx',
-      '*=>[KNN 200 @embedding $BLOB AS dist]',
+      '*=>[KNN 500 @embedding $BLOB AS dist]',
       'PARAMS', '2', 'BLOB', tasteBuffer,
       'RETURN', '1', 'dist',
       'SORTBY', 'dist', 'ASC',
-      'LIMIT', '0', '200',
+      'LIMIT', '0', '500',
       'DIALECT', '2',
     )
   } catch (e: any) {
@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const filtered = candidates.filter(c => !likedSet.has(c.id))
 
   // Fetch full painting data for top results
-  const fetchIds = filtered.slice(0, 100).map(c => c.id)
+  const fetchIds = filtered.slice(0, 500).map(c => c.id)
   const distMap = new Map(filtered.map(c => [c.id, c.dist]))
 
   const dataPipe = redis.pipeline()
