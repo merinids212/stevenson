@@ -39,6 +39,103 @@ def extract_id(url: str) -> str | None:
     return m.group(1) if m else None
 
 
+def push_paintings(paintings: list[dict], r):
+    """Push a batch of paintings to Redis (upsert). Returns (pushed, skipped) counts."""
+    pipe = r.pipeline()
+    pushed = 0
+    skipped = 0
+
+    for p in paintings:
+        pid = p.get("id") or ""
+        if not pid:
+            ext_id = extract_id(p.get("url", ""))
+            if not ext_id:
+                skipped += 1
+                continue
+            pid = f"cl:{ext_id}"
+
+        source = p.get("source", "cl")
+        ext_id = pid.split(":", 1)[1] if ":" in pid else pid
+
+        fields = {
+            "title": p.get("title", ""),
+            "price": str(p["price"]) if p.get("price") is not None else "",
+            "url": p.get("url", ""),
+            "location": p.get("location", ""),
+            "latitude": str(p["latitude"]) if p.get("latitude") is not None else "",
+            "longitude": str(p["longitude"]) if p.get("longitude") is not None else "",
+            "images": json.dumps(p.get("images", [])),
+            "posted": p.get("posted", ""),
+            "region": p.get("region", ""),
+            "state": p.get("state", ""),
+            "quality_score": str(p["quality_score"]) if p.get("quality_score") is not None else "",
+            "clip_styles": json.dumps(p["clip_styles"]) if p.get("clip_styles") is not None else "",
+            "uniqueness": str(p["uniqueness"]) if p.get("uniqueness") is not None else "",
+            "art_score": str(p["art_score"]) if p.get("art_score") is not None else "",
+            "artist": p.get("artist") or "",
+            "artist_confidence": str(p["artist_confidence"]) if p.get("artist_confidence") is not None else "",
+            "value_score": str(p["value_score"]) if p.get("value_score") is not None else "",
+            "aesthetic_score": str(p["aesthetic_score"]) if p.get("aesthetic_score") is not None else "",
+            "source": source,
+            "external_id": ext_id,
+        }
+
+        pipe.hset(f"stv:p:{pid}", mapping=fields)
+        pipe.sadd("stv:dedup", pid)
+
+        art_score = p.get("art_score") or 0
+        pipe.zadd("stv:idx:art_score", {pid: art_score})
+
+        price = p.get("price") or 0
+        pipe.zadd("stv:idx:price", {pid: price})
+
+        if p.get("value_score") is not None:
+            pipe.zadd("stv:idx:value_score", {pid: p["value_score"]})
+
+        region = p.get("region", "")
+        if region:
+            pipe.zadd(f"stv:idx:region:{region}", {pid: art_score})
+
+        state = p.get("state", "")
+        if state:
+            pipe.zadd(f"stv:idx:state:{state}", {pid: art_score})
+
+        pipe.zadd(f"stv:idx:source:{source}", {pid: art_score})
+        pushed += 1
+
+    pipe.execute()
+    return pushed, skipped
+
+
+def push_stats(paintings: list[dict], r):
+    """Recompute and push stv:stats from a list of paintings."""
+    prices = sorted(p["price"] for p in paintings if p.get("price") is not None)
+    scored = [p for p in paintings if p.get("art_score") is not None]
+    art_scores = sorted(p["art_score"] for p in scored)
+    regions = {p.get("region", "") for p in paintings} - {""}
+    states = {p.get("state", "") for p in paintings} - {""}
+    artists = [p for p in paintings if p.get("artist")]
+    top_rated = [p for p in scored if p["art_score"] >= 55]
+    gems = [p for p in paintings if p.get("value_score") is not None and p["value_score"] >= 8]
+
+    stats = {
+        "total_listings": str(len(paintings)),
+        "regions": str(len(regions)),
+        "states": str(len(states)),
+        "price_min": str(min(prices)) if prices else "0",
+        "price_max": str(max(prices)) if prices else "0",
+        "price_median": str(prices[len(prices) // 2]) if prices else "0",
+        "scored_count": str(len(scored)),
+        "artists_count": str(len(artists)),
+        "top_rated_count": str(len(top_rated)),
+        "gems_count": str(len(gems)),
+        "median_art_score": str(art_scores[len(art_scores) // 2]) if art_scores else "0",
+    }
+
+    r.hset("stv:stats", mapping=stats)
+    return stats
+
+
 def push(file_path: str = "paintings.json", flush: bool = False):
     path = Path(file_path)
     if not path.exists():
@@ -64,113 +161,15 @@ def push(file_path: str = "paintings.json", flush: bool = False):
                 break
         print(f"Flushed {deleted} existing keys")
 
-    # Filter to paintings with images
     paintings = [p for p in data if p.get("images") and len(p["images"]) > 0]
     print(f"Pushing {len(paintings)} paintings with images...")
 
-    pipe = r.pipeline()
-    pushed = 0
-    skipped = 0
-
-    for p in paintings:
-        # Get ID — try new format first, fall back to URL extraction
-        pid = p.get("id") or ""
-        if not pid:
-            ext_id = extract_id(p.get("url", ""))
-            if not ext_id:
-                skipped += 1
-                continue
-            pid = f"cl:{ext_id}"
-
-        source = p.get("source", "cl")
-        ext_id = pid.split(":", 1)[1] if ":" in pid else pid
-
-        # Build hash fields — strings for Redis
-        fields = {
-            "title": p.get("title", ""),
-            "price": str(p["price"]) if p.get("price") is not None else "",
-            "url": p.get("url", ""),
-            "location": p.get("location", ""),
-            "latitude": str(p["latitude"]) if p.get("latitude") is not None else "",
-            "longitude": str(p["longitude"]) if p.get("longitude") is not None else "",
-            "images": json.dumps(p.get("images", [])),
-            "posted": p.get("posted", ""),
-            "region": p.get("region", ""),
-            "state": p.get("state", ""),
-            "quality_score": str(p["quality_score"]) if p.get("quality_score") is not None else "",
-            "clip_styles": json.dumps(p["clip_styles"]) if p.get("clip_styles") is not None else "",
-            "uniqueness": str(p["uniqueness"]) if p.get("uniqueness") is not None else "",
-            "art_score": str(p["art_score"]) if p.get("art_score") is not None else "",
-            "artist": p.get("artist") or "",
-            "artist_confidence": str(p["artist_confidence"]) if p.get("artist_confidence") is not None else "",
-            "value_score": str(p["value_score"]) if p.get("value_score") is not None else "",
-            "aesthetic_score": str(p["aesthetic_score"]) if p.get("aesthetic_score") is not None else "",
-            "source": source,
-            "external_id": ext_id,
-        }
-
-        # Painting hash
-        pipe.hset(f"stv:p:{pid}", mapping=fields)
-
-        # Dedup set
-        pipe.sadd("stv:dedup", pid)
-
-        # Sorted indexes — all paintings go in art_score and price
-        art_score = p.get("art_score") or 0
-        pipe.zadd("stv:idx:art_score", {pid: art_score})
-
-        price = p.get("price") or 0
-        pipe.zadd("stv:idx:price", {pid: price})
-
-        # Value score — only paintings that have one
-        if p.get("value_score") is not None:
-            pipe.zadd("stv:idx:value_score", {pid: p["value_score"]})
-
-        # Region index
-        region = p.get("region", "")
-        if region:
-            pipe.zadd(f"stv:idx:region:{region}", {pid: art_score})
-
-        # State index
-        state = p.get("state", "")
-        if state:
-            pipe.zadd(f"stv:idx:state:{state}", {pid: art_score})
-
-        # Source index
-        pipe.zadd(f"stv:idx:source:{source}", {pid: art_score})
-
-        pushed += 1
-
-    pipe.execute()
+    pushed, skipped = push_paintings(paintings, r)
     print(f"Pushed {pushed} paintings ({skipped} skipped, no ID)")
 
-    # Compute and push stats
     print("Computing stats...")
-    prices = sorted(p["price"] for p in paintings if p.get("price") is not None)
-    scored = [p for p in paintings if p.get("art_score") is not None]
-    art_scores = sorted(p["art_score"] for p in scored)
-    regions = {p.get("region", "") for p in paintings} - {""}
-    states = {p.get("state", "") for p in paintings} - {""}
-    artists = [p for p in paintings if p.get("artist")]
-    top_rated = [p for p in scored if p["art_score"] >= 55]
-    gems = [p for p in paintings if p.get("value_score") is not None and p["value_score"] >= 8]
-
-    stats = {
-        "total_listings": str(len(paintings)),
-        "regions": str(len(regions)),
-        "states": str(len(states)),
-        "price_min": str(min(prices)) if prices else "0",
-        "price_max": str(max(prices)) if prices else "0",
-        "price_median": str(prices[len(prices) // 2]) if prices else "0",
-        "scored_count": str(len(scored)),
-        "artists_count": str(len(artists)),
-        "top_rated_count": str(len(top_rated)),
-        "gems_count": str(len(gems)),
-        "median_art_score": str(art_scores[len(art_scores) // 2]) if art_scores else "0",
-    }
-
-    r.hset("stv:stats", mapping=stats)
-    print(f"Stats: {json.dumps({k: v for k, v in stats.items()}, indent=2)}")
+    stats = push_stats(paintings, r)
+    print(f"Stats: {json.dumps(stats, indent=2)}")
     print("Done!")
 
 

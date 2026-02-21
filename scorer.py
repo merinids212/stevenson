@@ -1,14 +1,15 @@
 """
-CLIP-based painting quality scorer with LAION aesthetic predictor.
+Streaming CLIP-based painting scorer with direct Redis push.
 
-Downloads painting thumbnails, runs CLIP ViT-L/14 embeddings,
-scores aesthetics with the LAION improved-aesthetic-predictor MLP,
-parses artist names, computes value scores, and enriches paintings.json.
+Loads unscored paintings from data stores, scores them in chunks,
+pushes each chunk to Redis immediately, and writes scores back to stores.
 
 Usage:
-    python scorer.py                    # Score all paintings
-    python scorer.py --limit 50         # Score first 50 only (for testing)
-    python scorer.py --skip-download    # Reuse already downloaded images
+    python scorer.py                        # Score unscored, push each chunk
+    python scorer.py --rescore              # Re-score everything
+    python scorer.py --chunk-size 500       # Bigger chunks
+    python scorer.py --no-push              # Score but don't push
+    python scorer.py --limit 100            # Score only first 100 unscored
 """
 
 import argparse
@@ -17,6 +18,7 @@ import math
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +28,14 @@ from PIL import Image
 
 # Lazy imports for CLIP
 open_clip = None
+
+DATA_DIR = Path("data")
+THUMB_DIR = Path("thumbs")
+
+# LAION calibration: raw scores typically range ~2-9
+# Map [3, 8] → [0, 100] with clamp for stable cross-chunk scoring
+LAION_CAL_LOW = 3.0
+LAION_CAL_HIGH = 8.0
 
 
 def load_clip():
@@ -42,6 +52,8 @@ def load_clip():
     model.eval()
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
+    if device == "cpu" and torch.cuda.is_available():
+        device = "cuda"
     model = model.to(device)
     print(f"  Model loaded on {device}")
 
@@ -49,9 +61,6 @@ def load_clip():
 
 
 # ─── LAION AESTHETIC MLP ───
-# MLP from christophschuhmann/improved-aesthetic-predictor
-# Trained on LAION aesthetics data, outputs calibrated 1-10 scores
-# Architecture must match exactly (no ReLU activations — they're commented out in the original)
 
 LAION_WEIGHTS_URL = "https://github.com/christophschuhmann/improved-aesthetic-predictor/raw/main/sac+logos+ava1-l14-linearMSE.pth"
 LAION_WEIGHTS_PATH = Path("sac+logos+ava1-l14-linearMSE.pth")
@@ -185,7 +194,7 @@ BY_EXCLUSIONS = {
     "numbers", "hand", "the", "a", "an", "owner", "seller", "appointment",
     "local", "estate", "unknown", "anonymous", "various", "multiple",
     "me", "us", "them", "request", "design", "nature", "mail",
-    "cal", "so", "la",  # abbreviations for California, Southern, Los Angeles
+    "cal", "so", "la",
 }
 
 KNOWN_ARTISTS = {
@@ -198,44 +207,30 @@ KNOWN_ARTISTS = {
     "thiebaud", "diebenkorn", "ruscha", "baldessari",
 }
 
-# Words that signal end of a name (common in art listing titles)
 NAME_STOP_WORDS = {
-    # media & surface
     "oil", "on", "canvas", "acrylic", "watercolor", "painting", "print",
     "lithograph", "etching", "engraving", "serigraph", "giclee",
-    # condition & framing
     "original", "framed", "signed", "large", "small", "vintage", "antique",
     "unfinished", "matted", "mounted",
-    # art terms
     "art", "artwork", "piece", "gallery", "museum", "rare", "proof",
     "style", "scene", "geometric", "impressionist", "surreal",
-    # adjectives
     "beautiful", "stunning", "gorgeous", "amazing", "exceptional", "fine",
     "great", "new", "old", "modern", "contemporary",
-    # genres
     "abstract", "landscape", "portrait", "still", "life", "floral",
-    # prepositions & connectors
     "with", "and", "the", "from", "for", "in", "of", "at", "to", "or",
-    # misc listing words
     "mid", "century", "listed", "numbered", "hand", "painted", "wrap",
-    # animals & objects (common false captures)
     "tiger", "cubs", "cat", "cats", "dog", "horse", "flower", "flowers",
     "raccoon", "fish", "clown", "bird", "pirate", "ship", "street",
-    # places
     "hong", "kong", "paris", "east", "coast", "native", "american",
-    # meta
     "who", "has", "work", "archetype", "best", "offer",
-    # misc false positives
     "jewish", "men", "boy", "blue", "fisherman", "lake", "nostalgic",
     "number",
 }
 
-# Full-name rejects: these get captured as names but aren't
 NAME_REJECTS = {
     "artist", "by artist", "the artist", "by the artist",
     "surf", "proof", "signature", "israeli artist",
 }
-
 
 _NAME_PREFIX_STRIP = {
     "artist", "listed", "california", "american", "haitian", "cuban",
@@ -245,24 +240,19 @@ _NAME_PREFIX_STRIP = {
 
 
 def _clean_name(name):
-    """Trim leading prefixes and trailing stop words from a captured name."""
     words = name.split()
-    # Strip leading qualifiers: "California Artist Susie Cartt" → "Susie Cartt"
     while words and words[0].lower() in _NAME_PREFIX_STRIP:
         words.pop(0)
-    # Strip trailing stop words
     while words and words[-1].lower() in NAME_STOP_WORDS:
         words.pop()
     return " ".join(words)
 
 
 def _valid_name(name):
-    """Check if a cleaned name looks like an actual person name."""
     if not name or len(name) < 3:
         return False
     if name.lower() in NAME_REJECTS:
         return False
-    # Reject single very short words (TAR, Cal, etc.) — likely abbreviations
     words = name.split()
     if len(words) == 1 and len(name) < 4:
         return False
@@ -270,16 +260,12 @@ def _valid_name(name):
 
 
 def parse_artist(title):
-    """Extract artist name from painting title.
-
-    Returns (artist_name, confidence) or (None, None).
-    """
+    """Extract artist name from painting title."""
     if not title:
         return None, None
 
     t = title.strip()
 
-    # Pattern 1: "... by [Name]" — highest confidence
     m = re.search(r'\bby\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})', t)
     if m:
         name = _clean_name(m.group(1).strip())
@@ -287,7 +273,6 @@ def parse_artist(title):
         if first_word not in BY_EXCLUSIONS and _valid_name(name):
             return name, "high"
 
-    # Pattern 2: "Signed [Name]" — max 2 words, name must start uppercase
     m = re.search(
         r'\b[Ss][Ii][Gg][Nn][Ee][Dd]\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})',
         t,
@@ -302,7 +287,6 @@ def parse_artist(title):
         if _valid_name(name):
             return name, "medium"
 
-    # Pattern 3: "Artist [Name]" or "Artist: [Name]" — name must start uppercase
     m = re.search(
         r'\b[Aa][Rr][Tt][Ii][Ss][Tt]:?\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})',
         t,
@@ -312,7 +296,6 @@ def parse_artist(title):
         if _valid_name(name):
             return name, "medium"
 
-    # Pattern 4: Known famous names — word boundary match to avoid substrings
     t_lower = t.lower()
     for artist in KNOWN_ARTISTS:
         pattern = r'\b' + re.escape(artist) + r'\b'
@@ -328,89 +311,110 @@ def parse_artist(title):
 # ─── VALUE SCORE ───
 
 def compute_value_score(art_score, price):
-    """Compute gem/value score: high art + low price = high value.
-
-    Formula: (art_score / 100) / log(price + 1) * 100
-    """
     if art_score is None or price is None or price <= 0:
         return None
     return round((art_score / 100) / math.log(price + 1) * 100, 1)
 
 
-# ─── IMAGE DOWNLOAD ───
+# ─── IMAGE DOWNLOAD (parallel) ───
 
-THUMB_DIR = Path("thumbs")
-
-
-def download_images(paintings, limit=None):
-    """Download painting thumbnails."""
-    THUMB_DIR.mkdir(exist_ok=True)
-    items = paintings[:limit] if limit else paintings
-    downloaded = 0
-    skipped = 0
-
-    for i, p in enumerate(items):
-        if not p.get("images"):
-            continue
-        img_path = THUMB_DIR / f"{i}.jpg"
-        if img_path.exists():
-            skipped += 1
-            continue
-
-        url = p["images"][0]
-        try:
-            resp = requests.get(url, timeout=15, headers={
-                "User-Agent": "Mozilla/5.0"
-            })
-            resp.raise_for_status()
-            img_path.write_bytes(resp.content)
-            downloaded += 1
-        except Exception:
-            continue
-
-        if (downloaded + skipped) % 100 == 0:
-            print(f"  Progress: {downloaded + skipped}/{len(items)}")
-
-    print(f"  Downloaded {downloaded}, skipped {skipped} existing")
+def _download_one(painting, dest_path):
+    """Download a single painting thumbnail. Returns True on success."""
+    url = painting.get("images", [None])[0]
+    if not url:
+        return False
+    try:
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        dest_path.write_bytes(resp.content)
+        return True
+    except Exception:
+        return False
 
 
-# ─── MAIN PIPELINE ───
+def download_chunk_images(paintings, chunk_dir):
+    """Download images for a chunk in parallel. Returns {painting_id: image_path}."""
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    results = {}
+    futures = {}
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for p in paintings:
+            pid = p.get("id", "")
+            if not pid or not p.get("images"):
+                continue
+            # Use sanitized filename
+            safe_name = pid.replace(":", "_") + ".jpg"
+            img_path = chunk_dir / safe_name
+            if img_path.exists():
+                results[pid] = img_path
+                continue
+            fut = pool.submit(_download_one, p, img_path)
+            futures[fut] = (pid, img_path)
+
+        for fut in as_completed(futures):
+            pid, img_path = futures[fut]
+            if fut.result():
+                results[pid] = img_path
+
+    return results
+
+
+# ─── STORE I/O ───
+
+def load_all_stores():
+    """Load all data stores, return {source: store_dict}."""
+    DATA_DIR.mkdir(exist_ok=True)
+    stores = {}
+    for path in sorted(DATA_DIR.glob("*.json")):
+        source = path.stem
+        stores[source] = json.loads(path.read_text())
+    return stores
+
+
+def save_store(source, store):
+    """Save a store back to disk."""
+    path = DATA_DIR / f"{source}.json"
+    path.write_text(json.dumps(store, indent=2, ensure_ascii=False))
+
+
+def collect_unscored(stores, rescore=False):
+    """Collect paintings that need scoring from all stores.
+
+    Returns list of (source, painting_id, painting_dict) tuples.
+    """
+    items = []
+    for source, store in stores.items():
+        for pid, p in store["listings"].items():
+            if not p.get("images"):
+                continue
+            if not rescore and p.get("art_score") is not None:
+                continue
+            items.append((source, pid, p))
+    return items
+
+
+# ─── CHUNK SCORING PIPELINE ───
 
 @torch.no_grad()
-def score_paintings(paintings, limit=None, skip_download=False):
-    """Run full scoring pipeline."""
-    items = paintings[:limit] if limit else paintings
+def score_chunk(paintings, clip_model, preprocess, tokenizer, aesthetic_model, device, chunk_dir):
+    """Score a chunk of paintings. Returns list of enriched painting dicts."""
+    # Download images
+    image_map = download_chunk_images(paintings, chunk_dir)
 
-    # 1. Download images
-    if not skip_download:
-        print("\n1. Downloading images...")
-        download_images(items)
-    else:
-        print("\n1. Skipping download (--skip-download)")
-
-    # 2. Load CLIP (ViT-L/14)
-    print("\n2. Loading CLIP (ViT-L/14)...")
-    model, preprocess, tokenizer, device = load_clip()
-
-    # 3. Load LAION aesthetic predictor
-    print("\n3. Loading LAION aesthetic predictor...")
-    aesthetic_model = load_aesthetic_model(device)
-
-    # 4. Encode all images
-    print(f"\n4. Encoding {len(items)} images...")
+    # Encode images with CLIP
     all_features = []
-    valid_indices = []
-
-    batch_size = 16  # Smaller batches for ViT-L/14
+    valid_indices = []  # indices into paintings list
     batch_images = []
     batch_indices = []
+    batch_size = 16
 
-    for i in range(len(items)):
-        img_path = THUMB_DIR / f"{i}.jpg"
-        if not img_path.exists():
+    for i, p in enumerate(paintings):
+        pid = p.get("id", "")
+        if pid not in image_map:
             continue
         try:
-            img = Image.open(img_path).convert("RGB")
+            img = Image.open(image_map[pid]).convert("RGB")
             tensor = preprocess(img)
             batch_images.append(tensor)
             batch_indices.append(i)
@@ -419,142 +423,222 @@ def score_paintings(paintings, limit=None, skip_download=False):
 
         if len(batch_images) >= batch_size:
             batch_tensor = torch.stack(batch_images).to(device)
-            feats = model.encode_image(batch_tensor)
+            feats = clip_model.encode_image(batch_tensor)
             feats /= feats.norm(dim=-1, keepdim=True)
             all_features.append(feats)
             valid_indices.extend(batch_indices)
             batch_images = []
             batch_indices = []
 
-            if len(valid_indices) % 200 == 0:
-                print(f"  Encoded {len(valid_indices)} images...")
-
-    # Remaining batch
     if batch_images:
         batch_tensor = torch.stack(batch_images).to(device)
-        feats = model.encode_image(batch_tensor)
+        feats = clip_model.encode_image(batch_tensor)
         feats /= feats.norm(dim=-1, keepdim=True)
         all_features.append(feats)
         valid_indices.extend(batch_indices)
 
     if not all_features:
-        print("No images to score!")
-        return items
+        return []
 
     image_features = torch.cat(all_features, dim=0)
-    print(f"  Encoded {len(valid_indices)} images total")
 
-    # 5. LAION aesthetic scoring
-    print("\n5. Computing LAION aesthetic scores...")
-    aesthetic_scores = aesthetic_model(image_features).squeeze(-1).cpu().numpy()
-    print(f"  Aesthetic range: {aesthetic_scores.min():.2f} – {aesthetic_scores.max():.2f}")
+    # LAION aesthetic scoring with fixed calibration
+    aesthetic_raw = aesthetic_model(image_features).squeeze(-1).cpu().numpy()
+    laion_cal = np.clip(
+        (aesthetic_raw - LAION_CAL_LOW) / (LAION_CAL_HIGH - LAION_CAL_LOW) * 100,
+        0, 100,
+    )
 
-    # 6. Prompt-based quality scoring
-    print("\n6. Computing prompt quality scores...")
-    prompt_scores = compute_prompt_scores(model, tokenizer, image_features, device)
+    # Prompt quality scoring
+    prompt_scores = compute_prompt_scores(clip_model, tokenizer, image_features, device)
 
-    # 7. Style classification
-    print("\n7. Classifying styles...")
-    styles = classify_styles(model, tokenizer, image_features, device)
+    # Style classification
+    styles = classify_styles(clip_model, tokenizer, image_features, device)
 
-    # 8. Uniqueness
-    print("\n8. Computing uniqueness scores...")
+    # Within-chunk uniqueness (N×N similarity)
     sim_matrix = (image_features @ image_features.T).cpu().numpy()
     np.fill_diagonal(sim_matrix, 0)
     avg_similarity = sim_matrix.mean(axis=1)
     uniqueness = ((1 - avg_similarity) * 100).clip(0, 100)
 
-    # 9. Parse artist names
-    print("\n9. Parsing artist names...")
-    artist_count = 0
-    for p in items:
-        artist, confidence = parse_artist(p.get("title", ""))
-        if artist:
-            p["artist"] = artist
-            p["artist_confidence"] = confidence
-            artist_count += 1
-        else:
-            p["artist"] = None
-            p["artist_confidence"] = None
-    print(f"  Found {artist_count} artist names")
-
-    # 10. Enrich painting data
-    print("\n10. Enriching painting data...")
-    # Normalize LAION scores to 0-100 for composite
-    aes_min, aes_max = float(aesthetic_scores.min()), float(aesthetic_scores.max())
-    aes_range = aes_max - aes_min if aes_max > aes_min else 1.0
-    laion_norm = (aesthetic_scores - aes_min) / aes_range * 100
-
+    # Enrich paintings
+    scored = []
     for j, idx in enumerate(valid_indices):
-        items[idx]["aesthetic_score"] = round(float(aesthetic_scores[j]), 2)
-        items[idx]["quality_score"] = round(float(prompt_scores[j]), 1)
-        items[idx]["clip_styles"] = styles[j]
-        items[idx]["uniqueness"] = round(float(uniqueness[j]), 1)
+        p = paintings[idx]
 
-        # Composite art score: LAION 50% + prompt quality 20% + uniqueness 30%
-        ln = laion_norm[j]
+        # Parse artist
+        artist, confidence = parse_artist(p.get("title", ""))
+        p["artist"] = artist
+        p["artist_confidence"] = confidence
+
+        # Scores
+        p["aesthetic_score"] = round(float(aesthetic_raw[j]), 2)
+        p["quality_score"] = round(float(prompt_scores[j]), 1)
+        p["clip_styles"] = styles[j]
+        p["uniqueness"] = round(float(uniqueness[j]), 1)
+
+        # Composite: LAION 50% + quality 30% + uniqueness 20%
+        ln = laion_cal[j]
         pq = prompt_scores[j]
         u = uniqueness[j]
-        items[idx]["art_score"] = round(float(ln * 0.5 + pq * 0.2 + u * 0.3), 1)
+        p["art_score"] = round(float(ln * 0.5 + pq * 0.3 + u * 0.2), 1)
 
         # Value score
-        items[idx]["value_score"] = compute_value_score(
-            items[idx]["art_score"],
-            items[idx].get("price"),
+        p["value_score"] = compute_value_score(p["art_score"], p.get("price"))
+
+        scored.append(p)
+
+    return scored
+
+
+# ─── MAIN PIPELINE ───
+
+def score_paintings(
+    limit=None,
+    rescore=False,
+    chunk_size=200,
+    no_push=False,
+):
+    """Stream-score paintings from stores, pushing chunks to Redis."""
+    # Load stores
+    stores = load_all_stores()
+    if not stores:
+        print("No data stores found in data/")
+        return
+
+    total_in_stores = sum(len(s["listings"]) for s in stores.values())
+    print(f"Stores: {len(stores)} sources, {total_in_stores:,} total listings")
+
+    # Collect unscored
+    items = collect_unscored(stores, rescore=rescore)
+    if not items:
+        print("All paintings already scored (use --rescore to re-score)")
+        return
+
+    if limit:
+        items = items[:limit]
+
+    print(f"To score: {len(items):,} paintings (chunk size: {chunk_size})")
+
+    # Load models once
+    print("\nLoading models...")
+    clip_model, preprocess, tokenizer, device = load_clip()
+    aesthetic_model = load_aesthetic_model(device)
+
+    # Connect to Redis (unless --no-push)
+    redis_client = None
+    if not no_push:
+        try:
+            import redis
+            from push import get_redis_url
+            redis_client = redis.from_url(get_redis_url(), decode_responses=True)
+            redis_client.ping()
+            print("Connected to Redis")
+        except Exception as e:
+            print(f"Warning: Redis unavailable ({e}), scoring without push")
+            redis_client = None
+
+    # Process in chunks
+    THUMB_DIR.mkdir(exist_ok=True)
+    total_scored = 0
+    total_pushed = 0
+    all_scored_paintings = []
+    num_chunks = math.ceil(len(items) / chunk_size)
+
+    for chunk_idx in range(num_chunks):
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, len(items))
+        chunk_items = items[start:end]
+        chunk_paintings = [p for _, _, p in chunk_items]
+
+        print(f"\n--- Chunk {chunk_idx + 1}/{num_chunks} ({len(chunk_paintings)} paintings) ---")
+
+        # Score the chunk
+        chunk_dir = THUMB_DIR / f"chunk_{chunk_idx}"
+        scored = score_chunk(
+            chunk_paintings, clip_model, preprocess, tokenizer,
+            aesthetic_model, device, chunk_dir,
         )
 
-    # Stats
-    scored = [p for p in items if p.get("art_score") is not None]
-    if scored:
-        scores = [p["art_score"] for p in scored]
-        aes = [p["aesthetic_score"] for p in scored if p.get("aesthetic_score") is not None]
-        print(f"\n--- Scoring complete ---")
-        print(f"Scored: {len(scored)} paintings")
-        print(f"Art score range: {min(scores):.1f} – {max(scores):.1f}")
-        print(f"Median art score: {sorted(scores)[len(scores)//2]:.1f}")
-        if aes:
-            print(f"LAION aesthetic range: {min(aes):.2f} – {max(aes):.2f}")
-            print(f"Median LAION aesthetic: {sorted(aes)[len(aes)//2]:.2f}")
+        if not scored:
+            print(f"  No images scored in this chunk")
+            continue
 
-        artists = [p for p in items if p.get("artist")]
-        print(f"Artists found: {len(artists)}")
+        total_scored += len(scored)
+        all_scored_paintings.extend(scored)
 
-        gems = [p for p in scored if p.get("value_score") is not None]
-        if gems:
-            top_gems = sorted(gems, key=lambda p: p["value_score"], reverse=True)[:5]
-            print(f"\nTop 5 Gems (value score):")
-            for p in top_gems:
-                print(f"  {p['value_score']:.1f} | art:{p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:50]}")
+        # Push to Redis
+        if redis_client:
+            from push import push_paintings
+            pushed, skipped = push_paintings(scored, redis_client)
+            total_pushed += pushed
+            print(f"  Scored {len(scored)} — pushed {pushed} to Redis "
+                  f"({total_scored}/{len(items)} total)")
+        else:
+            print(f"  Scored {len(scored)} ({total_scored}/{len(items)} total)")
 
-        top = sorted(scored, key=lambda p: p["art_score"], reverse=True)[:5]
-        print(f"\nTop 5 (art score):")
+        # Write scores back to stores
+        for source, pid, p in chunk_items:
+            if p.get("art_score") is not None:
+                stores[source]["listings"][pid] = p
+
+        # Save stores after each chunk (crash-safe)
+        sources_in_chunk = {source for source, _, _ in chunk_items}
+        for source in sources_in_chunk:
+            save_store(source, stores[source])
+
+    # Update Redis stats
+    if redis_client and total_pushed > 0:
+        from push import push_stats
+        # Gather all paintings from stores for accurate stats
+        all_paintings = []
+        for store in stores.values():
+            all_paintings.extend(
+                p for p in store["listings"].values() if p.get("images")
+            )
+        stats = push_stats(all_paintings, redis_client)
+        print(f"\nRedis stats updated: {stats.get('scored_count', 0)} scored, "
+              f"{stats.get('total_listings', 0)} total")
+
+    # Summary
+    if all_scored_paintings:
+        scores = [p["art_score"] for p in all_scored_paintings]
+        print(f"\n{'='*50}")
+        print(f"  Scoring complete")
+        print(f"{'='*50}")
+        print(f"  Scored: {total_scored}")
+        print(f"  Art score range: {min(scores):.1f} – {max(scores):.1f}")
+        print(f"  Median: {sorted(scores)[len(scores)//2]:.1f}")
+        if redis_client:
+            print(f"  Pushed to Redis: {total_pushed}")
+
+        artists = [p for p in all_scored_paintings if p.get("artist")]
+        print(f"  Artists found: {len(artists)}")
+
+        top = sorted(all_scored_paintings, key=lambda p: p["art_score"], reverse=True)[:5]
+        print(f"\n  Top 5:")
         for p in top:
-            print(f"  {p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:60]}")
-
-    return items
+            print(f"    {p['art_score']:.1f} | ${p.get('price', '?')} | {p['title'][:55]}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="CLIP-based painting scorer")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of paintings to score")
-    parser.add_argument("--skip-download", action="store_true", help="Skip image download")
-    parser.add_argument("-i", "--input", default="paintings.json", help="Input JSON")
-    parser.add_argument("-o", "--output", default="paintings.json", help="Output JSON (overwrites input by default)")
+    parser = argparse.ArgumentParser(description="Streaming CLIP painting scorer")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Score only first N unscored paintings")
+    parser.add_argument("--rescore", action="store_true",
+                        help="Re-score all paintings (ignore existing scores)")
+    parser.add_argument("--chunk-size", type=int, default=200,
+                        help="Paintings per chunk (default: 200)")
+    parser.add_argument("--no-push", action="store_true",
+                        help="Score without pushing to Redis")
     args = parser.parse_args()
 
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"Input file not found: {input_path}")
-        sys.exit(1)
-
-    paintings = json.loads(input_path.read_text())
-    print(f"Loaded {len(paintings)} paintings from {input_path}")
-
-    score_paintings(paintings, limit=args.limit, skip_download=args.skip_download)
-
-    output_path = Path(args.output)
-    output_path.write_text(json.dumps(paintings, indent=2, ensure_ascii=False))
-    print(f"\nSaved {len(paintings)} paintings to {output_path}")
+    score_paintings(
+        limit=args.limit,
+        rescore=args.rescore,
+        chunk_size=args.chunk_size,
+        no_push=args.no_push,
+    )
 
 
 if __name__ == "__main__":

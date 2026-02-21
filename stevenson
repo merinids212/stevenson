@@ -1,0 +1,484 @@
+#!/usr/bin/env python3
+"""
+stevenson — CLI for the Stevenson art discovery platform.
+
+Usage:
+    stevenson pull                  Pull new paintings from all sources
+    stevenson pull --ebay           Pull from eBay only
+    stevenson pull --cl             Pull from Craigslist only
+    stevenson score                 Stream-score paintings, push chunks to Redis
+    stevenson push                  Push paintings.json to Redis
+    stevenson update                Full pipeline: pull → score → push
+    stevenson status                Show store + Redis stats
+    stevenson export                Merge stores → paintings.json
+"""
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+# Ensure project root is on the path
+PROJECT_ROOT = Path(__file__).resolve().parent
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+# ─── Helpers ───
+
+def heading(text):
+    print(f"\n\033[1;36m{'─'*50}\033[0m")
+    print(f"\033[1;36m  {text}\033[0m")
+    print(f"\033[1;36m{'─'*50}\033[0m\n")
+
+
+def dim(text):
+    return f"\033[2m{text}\033[0m"
+
+
+def green(text):
+    return f"\033[32m{text}\033[0m"
+
+
+def yellow(text):
+    return f"\033[33m{text}\033[0m"
+
+
+def red(text):
+    return f"\033[31m{text}\033[0m"
+
+
+def stat_line(label, value, width=20):
+    print(f"  {label:<{width}} {value}")
+
+
+# ─── Commands ───
+
+def cmd_pull(args):
+    """Pull new listings from sources into the data stores."""
+    from scraper import (
+        load_store, save_store, merge_into_store,
+        run_craigslist, run_ebay,
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    sources = []
+    if args.ebay or (not args.cl and not args.ebay):
+        sources.append("ebay")
+    if args.cl or (not args.cl and not args.ebay):
+        sources.append("craigslist")
+
+    # Build a minimal args namespace for the scraper functions
+    scraper_args = argparse.Namespace(
+        query=args.query or "painting",
+        min_price=args.min_price,
+        max_price=args.max_price,
+        no_image=False,
+        region=None,
+        state=args.state,
+        delay=1.0,
+        delay_ebay=2.0,
+        ebay_queries=args.ebay_queries,
+        num_queries=args.num_queries,
+        max_pages=args.max_pages,
+    )
+
+    total_new = 0
+
+    if "ebay" in sources:
+        heading("Pulling from eBay")
+        store = load_store("ebay")
+        known_ids = set(store["listings"].keys())
+        print(f"  Store: {len(known_ids):,} existing listings")
+        print(f"  Runs:  {store['meta'].get('total_runs', 0)}\n")
+
+        listings = run_ebay(scraper_args, known_ids)
+        if listings:
+            new, updated = merge_into_store(store, listings)
+            store["meta"]["last_run"] = now
+            store["meta"]["total_runs"] += 1
+            store["meta"]["total_scraped"] += len(listings)
+            save_store("ebay", store)
+            total_new += new
+            print(f"\n  {green(f'+{new} new')}, {updated} refreshed, "
+                  f"{len(store['listings']):,} total")
+        else:
+            print(f"  No new listings found")
+
+    if "craigslist" in sources:
+        heading("Pulling from Craigslist")
+        store = load_store("craigslist")
+        known_ids = set(store["listings"].keys())
+        print(f"  Store: {len(known_ids):,} existing listings")
+        print(f"  Runs:  {store['meta'].get('total_runs', 0)}\n")
+
+        listings = run_craigslist(scraper_args, known_ids)
+        if listings:
+            new, updated = merge_into_store(store, listings)
+            store["meta"]["last_run"] = now
+            store["meta"]["total_runs"] += 1
+            store["meta"]["total_scraped"] += len(listings)
+            save_store("craigslist", store)
+            total_new += new
+            print(f"\n  {green(f'+{new} new')}, {updated} refreshed, "
+                  f"{len(store['listings']):,} total")
+        else:
+            print(f"  No new listings found")
+
+    print(f"\n  Total new this run: {green(str(total_new))}")
+    return total_new
+
+
+def cmd_export(args):
+    """Merge all data stores into paintings.json."""
+    from scraper import export_paintings
+
+    heading("Exporting to paintings.json")
+    output = Path("paintings.json")
+    all_listings = export_paintings(output)
+    return len(all_listings)
+
+
+def cmd_score(args):
+    """Run the streaming CLIP scorer on data stores."""
+    heading("Scoring paintings")
+
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print(red("  PyTorch not installed — scorer requires torch + open_clip"))
+        print(dim("  pip install torch open_clip_torch pillow"))
+        return False
+
+    from scorer import score_paintings
+
+    score_paintings(
+        limit=args.limit,
+        rescore=args.rescore,
+        chunk_size=args.chunk_size,
+        no_push=args.no_push,
+    )
+    return True
+
+
+def cmd_push(args):
+    """Push paintings.json to Redis."""
+    heading("Pushing to Redis")
+
+    paintings_path = Path("paintings.json")
+    if not paintings_path.exists():
+        print(red("  paintings.json not found — run 'stevenson export' first"))
+        return False
+
+    from push import push
+    push(str(paintings_path), flush=args.flush)
+    return True
+
+
+def cmd_update(args):
+    """Full pipeline: pull → export → score → push."""
+    heading("STEVENSON UPDATE")
+    print(f"  {dim(datetime.now().strftime('%Y-%m-%d %H:%M'))}")
+
+    # Pull
+    new = cmd_pull(args)
+
+    # Export
+    count = cmd_export(args)
+    if not count:
+        print(red("\n  No listings to process — stopping."))
+        return
+
+    # Score (optional — skip if --no-score)
+    # Scorer now pushes to Redis directly per-chunk, so no separate push needed
+    if not args.no_score:
+        # Ensure update passes the right args for the streaming scorer
+        args.rescore = getattr(args, "rescore", False)
+        args.chunk_size = getattr(args, "chunk_size", 200)
+        args.no_push = False  # update always pushes
+        ok = cmd_score(args)
+        if not ok:
+            print(yellow("\n  Scoring failed — pushing unscored data"))
+            cmd_push(args)
+    else:
+        print(dim("\n  Skipping scorer (--no-score)"))
+        cmd_push(args)
+
+    heading("Done")
+    print(f"  {green(f'{count:,} paintings live')}")
+
+
+def cmd_status(args):
+    """Show store stats and optionally Redis stats."""
+    heading("Stevenson Status")
+
+    # Local stores
+    data_dir = Path("data")
+    data_dir.mkdir(exist_ok=True)
+    stores = sorted(data_dir.glob("*.json"))
+
+    total_all = 0
+    for path in stores:
+        store = json.loads(path.read_text())
+        meta = store["meta"]
+        listings = store["listings"]
+        count = len(listings)
+        total_all += count
+
+        source = meta.get("source", path.stem).upper()
+        priced = [l for l in listings.values() if l.get("price") is not None]
+        prices = sorted(l["price"] for l in priced) if priced else []
+
+        print(f"  \033[1m{source}\033[0m")
+        stat_line("Listings:", f"{count:,}")
+        stat_line("Runs:", str(meta.get("total_runs", 0)))
+        stat_line("Total scraped:", f"{meta.get('total_scraped', 0):,}")
+        if meta.get("last_run"):
+            last = meta["last_run"][:16].replace("T", " ")
+            stat_line("Last run:", last)
+        if prices:
+            stat_line("Price range:", f"${min(prices):,.0f} – ${max(prices):,.0f}")
+            stat_line("Median price:", f"${prices[len(prices)//2]:,.0f}")
+
+        # Age
+        seen_dates = []
+        for l in listings.values():
+            fs = l.get("first_seen")
+            if fs:
+                try:
+                    seen_dates.append(datetime.fromisoformat(fs))
+                except (ValueError, TypeError):
+                    pass
+        if seen_dates:
+            oldest = min(seen_dates).strftime("%Y-%m-%d")
+            newest = max(seen_dates).strftime("%Y-%m-%d")
+            stat_line("Data range:", f"{oldest} → {newest}")
+        print()
+
+    if not stores:
+        print(f"  {dim('No data stores yet — run: stevenson pull')}\n")
+
+    # paintings.json
+    pj = Path("paintings.json")
+    if pj.exists():
+        data = json.loads(pj.read_text())
+        scored = sum(1 for p in data if p.get("art_score") is not None)
+        print(f"  \033[1mPAINTINGS.JSON\033[0m")
+        stat_line("Listings:", f"{len(data):,}")
+        stat_line("Scored:", f"{scored:,}")
+        stat_line("File size:", f"{pj.stat().st_size / 1024 / 1024:.1f} MB")
+        print()
+
+    # Redis (if reachable)
+    try:
+        from push import get_redis_url
+        import redis as r
+        client = r.from_url(get_redis_url(), decode_responses=True)
+        client.ping()
+        stats_raw = client.hgetall("stv:stats")
+        if stats_raw:
+            print(f"  \033[1mREDIS\033[0m")
+            stat_line("Listings:", f"{stats_raw.get('total_listings', '?')}")
+            stat_line("Scored:", f"{stats_raw.get('scored_count', '?')}")
+            stat_line("Artists:", f"{stats_raw.get('artists_count', '?')}")
+            stat_line("Top-rated:", f"{stats_raw.get('top_rated_count', '?')}")
+            stat_line("Gems:", f"{stats_raw.get('gems_count', '?')}")
+            stat_line("Price range:",
+                      f"${float(stats_raw.get('price_min', 0)):,.0f} – "
+                      f"${float(stats_raw.get('price_max', 0)):,.0f}")
+            print()
+    except Exception:
+        print(f"  {dim('Redis: not connected')}\n")
+
+    print(f"  Total local: {green(f'{total_all:,} listings')}")
+
+
+def cmd_ingest(args):
+    """Import an existing JSON file into a data store."""
+    from scraper import load_store, save_store, merge_into_store
+    from scrapers.base import Listing
+
+    heading(f"Ingesting into {args.source} store")
+
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(red(f"  File not found: {file_path}"))
+        return
+
+    data = json.loads(file_path.read_text())
+    if not isinstance(data, list):
+        print(red("  Expected a JSON array of listings"))
+        return
+
+    print(f"  Loaded {len(data):,} entries from {file_path}")
+
+    store = load_store(args.source)
+    existing = len(store["listings"])
+    print(f"  Store has {existing:,} existing listings")
+
+    # Normalize: ensure each entry has id and source
+    source_prefix = "cl" if args.source == "craigslist" else "eb"
+    normalized = []
+    for entry in data:
+        if not entry.get("id"):
+            # Try to extract from URL
+            import re
+            url = entry.get("url", "")
+            if "craigslist" in url:
+                m = re.search(r"/(\d+)\.html", url)
+                if m:
+                    entry["id"] = f"cl:{m.group(1)}"
+                    entry["source"] = "cl"
+            elif "ebay.com/itm/" in url:
+                m = re.search(r"/itm/(\d+)", url)
+                if m:
+                    entry["id"] = f"eb:{m.group(1)}"
+                    entry["source"] = "eb"
+        if not entry.get("source"):
+            entry["source"] = source_prefix
+        if entry.get("id"):
+            normalized.append(entry)
+
+    print(f"  {len(normalized):,} entries with valid IDs")
+
+    # Wrap as pseudo-Listing dicts for merge_into_store
+    now = datetime.now(timezone.utc).isoformat()
+    new_count = 0
+    updated_count = 0
+    for entry in normalized:
+        pid = entry["id"]
+        if pid in store["listings"]:
+            # Merge: keep existing first_seen, update fields + last_seen
+            existing_entry = store["listings"][pid]
+            existing_entry["last_seen"] = now
+            # Bring in scored fields if present
+            for field in ["art_score", "aesthetic_score", "quality_score",
+                          "value_score", "uniqueness", "clip_styles",
+                          "artist", "artist_confidence"]:
+                if entry.get(field) is not None:
+                    existing_entry[field] = entry[field]
+            if entry.get("price") is not None:
+                existing_entry["price"] = entry["price"]
+            updated_count += 1
+        else:
+            entry.setdefault("first_seen", now)
+            entry.setdefault("last_seen", now)
+            store["listings"][pid] = entry
+            new_count += 1
+
+    store["meta"]["last_run"] = now
+    store["meta"]["total_runs"] += 1
+    store["meta"]["total_scraped"] += len(normalized)
+    save_store(args.source, store)
+
+    print(f"\n  {green(f'+{new_count} new')}, {updated_count} updated, "
+          f"{len(store['listings']):,} total in store")
+
+
+# ─── CLI ───
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="stevenson",
+        description="Stevenson art discovery platform CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+commands:
+  pull      Scrape new paintings from eBay / Craigslist
+  score     Run CLIP aesthetic scorer on paintings.json
+  push      Push paintings.json to Redis
+  update    Full pipeline: pull → export → score → push
+  export    Merge data stores into paintings.json
+  ingest    Import an existing JSON file into a store
+  status    Show store stats + Redis info
+        """,
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # pull
+    p_pull = sub.add_parser("pull", help="Scrape new paintings")
+    p_pull.add_argument("--ebay", action="store_true", help="eBay only")
+    p_pull.add_argument("--cl", action="store_true", help="Craigslist only")
+    p_pull.add_argument("--state", nargs="+", default=None, help="CL states (e.g. ca ny)")
+    p_pull.add_argument("-q", "--query", default=None, help="CL search query")
+    p_pull.add_argument("--ebay-queries", nargs="+", default=None,
+                        help="Explicit eBay queries")
+    p_pull.add_argument("--num-queries", type=int, default=4,
+                        help="Random eBay queries per run (default: 4)")
+    p_pull.add_argument("--max-pages", type=int, default=5,
+                        help="Max eBay pages per query (default: 5)")
+    p_pull.add_argument("--min-price", type=int, default=None)
+    p_pull.add_argument("--max-price", type=int, default=None)
+
+    # export
+    sub.add_parser("export", help="Merge stores → paintings.json")
+
+    # score
+    p_score = sub.add_parser("score", help="Run CLIP scorer")
+    p_score.add_argument("--limit", type=int, default=None,
+                         help="Score only first N unscored paintings")
+    p_score.add_argument("--rescore", action="store_true",
+                         help="Re-score all paintings (ignore existing scores)")
+    p_score.add_argument("--chunk-size", type=int, default=200,
+                         help="Paintings per chunk (default: 200)")
+    p_score.add_argument("--no-push", action="store_true",
+                         help="Score without pushing to Redis")
+
+    # push
+    p_push = sub.add_parser("push", help="Push to Redis")
+    p_push.add_argument("--flush", action="store_true",
+                        help="Flush all stv:* keys before pushing")
+
+    # update (full pipeline)
+    p_update = sub.add_parser("update", help="Full pipeline: pull → score → push")
+    p_update.add_argument("--ebay", action="store_true", help="eBay only")
+    p_update.add_argument("--cl", action="store_true", help="Craigslist only")
+    p_update.add_argument("--state", nargs="+", default=None, help="CL states")
+    p_update.add_argument("-q", "--query", default=None)
+    p_update.add_argument("--ebay-queries", nargs="+", default=None)
+    p_update.add_argument("--num-queries", type=int, default=4)
+    p_update.add_argument("--max-pages", type=int, default=5)
+    p_update.add_argument("--min-price", type=int, default=None)
+    p_update.add_argument("--max-price", type=int, default=None)
+    p_update.add_argument("--no-score", action="store_true",
+                          help="Skip CLIP scoring (faster)")
+    p_update.add_argument("--flush", action="store_true",
+                          help="Flush Redis before pushing")
+    p_update.add_argument("--limit", type=int, default=None,
+                          help="Score only first N unscored paintings")
+    p_update.add_argument("--rescore", action="store_true",
+                          help="Re-score all paintings")
+    p_update.add_argument("--chunk-size", type=int, default=200,
+                          help="Paintings per scoring chunk (default: 200)")
+
+    # ingest
+    p_ingest = sub.add_parser("ingest", help="Import JSON file into a store")
+    p_ingest.add_argument("file", help="Path to JSON file")
+    p_ingest.add_argument("--source", required=True, choices=["craigslist", "ebay"],
+                          help="Which store to import into")
+
+    # status
+    sub.add_parser("status", help="Show stats")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    commands = {
+        "pull": cmd_pull,
+        "export": cmd_export,
+        "score": cmd_score,
+        "push": cmd_push,
+        "update": cmd_update,
+        "status": cmd_status,
+        "ingest": cmd_ingest,
+    }
+    commands[args.command](args)
+
+
+if __name__ == "__main__":
+    main()
