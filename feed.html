@@ -23,6 +23,7 @@
     --white: #fff;
     --gray: #888;
     --dim: rgba(255,255,255,0.5);
+    --teal: #5ac8fa;
     --red: #e53e3e;
   }
 
@@ -128,6 +129,10 @@
     margin-top: 4px;
     letter-spacing: 0.02em;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .card-price {
+    color: var(--teal);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   }
 
   .card-score-line {
@@ -388,7 +393,10 @@ function renderCards(newPaintings, startIdx) {
     const price = p.price ? `$${Math.round(p.price)}` : ''
     const location = p.location || p.region || ''
     const artist = p.artist || ''
-    const meta = [artist, price, location].filter(Boolean).join(' · ')
+    const metaParts = [artist, location].filter(Boolean).join(' · ')
+    const meta = price
+      ? (metaParts ? `<span class="card-price">${esc(price)}</span> · ${esc(metaParts)}` : `<span class="card-price">${esc(price)}</span>`)
+      : esc(metaParts)
     const card = document.createElement('div')
     card.className = 'card'
     card.dataset.idx = idx
@@ -400,7 +408,7 @@ function renderCards(newPaintings, startIdx) {
         onload="this.classList.add('loaded'); var s=this.previousElementSibling; if(s&&s.classList.contains('card-shimmer'))s.remove()">` : ''}
       <div class="card-info">
         <div class="card-title">${esc(p.title || 'Untitled')}</div>
-        ${meta ? `<div class="card-meta">${esc(meta)}</div>` : ''}
+        ${meta ? `<div class="card-meta">${meta}</div>` : ''}
         ${p.art_score ? `<div class="card-score-line">
           <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(p.art_score, 100)}%;background:rgba(255,255,255,${0.15 + (p.art_score / 100) * 0.35})"></div></div>
           <span class="score-val">${Math.round(p.art_score)}</span>
