@@ -124,13 +124,30 @@
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
 
-  .card-score {
-    display: inline-block;
-    font-size: 10px;
+  .card-score-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .score-bar {
+    flex: 1;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 1px;
+    overflow: hidden;
+    max-width: 100px;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 1px;
+    transition: width 0.3s ease;
+  }
+  .score-val {
+    font-size: 9px;
     font-weight: 500;
-    letter-spacing: 0.04em;
-    color: var(--dim);
-    margin-top: 5px;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.35);
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
 
@@ -294,6 +311,7 @@ let seenIds = new Set()  // IDs we've been served (for exclusion)
 let currentIndex = 0
 let isFetching = false
 let fetchQueue = null     // debounced taste re-fetch after like
+let pendingFetch = false  // queue fetch when one is in progress
 
 const BUFFER_AHEAD = 5   // pre-fetch when this many cards left
 const FETCH_SIZE = 15     // cards per fetch
@@ -308,7 +326,7 @@ async function init() {
 
 // ─── Fetch a batch from the smart feed API ───
 async function fetchBatch(size) {
-  if (isFetching) return
+  if (isFetching) { pendingFetch = true; return }
   isFetching = true
 
   try {
@@ -338,6 +356,12 @@ async function fetchBatch(size) {
     for (const p of newPaintings) {
       seenIds.add(p.id)
     }
+    // Cap seenIds to prevent unbounded memory growth
+    if (seenIds.size > 500) {
+      const recent = Array.from(seenIds).slice(-300)
+      seenIds = new Set(recent)
+    }
+
     const startIdx = paintings.length
     paintings.push(...newPaintings)
 
@@ -357,6 +381,12 @@ async function fetchBatch(size) {
   }
 
   isFetching = false
+
+  // Process queued fetch that was requested during this one
+  if (pendingFetch) {
+    pendingFetch = false
+    fetchBatch(FETCH_SIZE)
+  }
 }
 
 // ─── Render cards into DOM ───
@@ -379,20 +409,24 @@ function renderCards(newPaintings, startIdx) {
 
     card.innerHTML = `
       <div class="card-shimmer"></div>
-      ${imgUrl ? `<img class="card-img" src="${imgUrl}" alt="" draggable="false"
-        onload="this.classList.add('loaded'); this.previousElementSibling.remove()">` : ''}
+      ${imgUrl ? `<img class="card-img" src="${imgUrl}" alt="" draggable="false" loading="lazy"
+        onload="this.classList.add('loaded'); var s=this.previousElementSibling; if(s&&s.classList.contains('card-shimmer'))s.remove()">` : ''}
       <div class="card-info">
         <div class="card-title">${esc(p.title || 'Untitled')}</div>
         ${meta ? `<div class="card-meta">${esc(meta)}</div>` : ''}
+        ${p.art_score ? `<div class="card-score-line">
+          <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(p.art_score, 100)}%;background:rgba(255,255,255,${0.15 + (p.art_score / 100) * 0.35})"></div></div>
+          <span class="score-val">${Math.round(p.art_score)}</span>
+        </div>` : ''}
       </div>
       <div class="card-actions">
         <button class="action-btn like-btn${isLiked ? ' liked' : ''}" data-idx="${idx}" aria-label="Like">
           <span class="action-icon">${isLiked ? '&#9829;' : '&#9825;'}</span>
           <span class="action-label">like</span>
         </button>
-        <button class="action-btn" onclick="openListing(${idx})" aria-label="View">
-          <span class="action-icon" style="font-size:22px">&#8599;</span>
-          <span class="action-label">view</span>
+        <button class="action-btn" onclick="openListing(${idx})" aria-label="View listing">
+          <span class="action-icon" style="font-size:20px">&#8594;</span>
+          <span class="action-label">listing</span>
         </button>
       </div>
     `
@@ -430,6 +464,31 @@ function renderCards(newPaintings, startIdx) {
   }
 }
 
+// ─── Image memory management ───
+function manageImages() {
+  const cards = document.querySelectorAll('.card[data-idx]')
+  for (const card of cards) {
+    const idx = parseInt(card.dataset.idx)
+    const dist = Math.abs(idx - currentIndex)
+    const img = card.querySelector('.card-img')
+    if (!img) continue
+
+    if (dist > 20 && img.src && !img.dataset.unloaded) {
+      // Unload far-away images to free decoded bitmap memory
+      img.dataset.unloaded = '1'
+      img.removeAttribute('src')
+      img.classList.remove('loaded')
+    } else if (dist <= 5 && img.dataset.unloaded) {
+      // Restore nearby images (browser serves from HTTP cache)
+      const p = paintings[idx]
+      if (p && p.images && p.images[0]) {
+        delete img.dataset.unloaded
+        img.src = p.images[0]
+      }
+    }
+  }
+}
+
 // ─── Scroll handling ───
 function setupScroll() {
   const feed = document.getElementById('feed')
@@ -441,6 +500,7 @@ function setupScroll() {
       const idx = Math.round(feed.scrollTop / window.innerHeight)
       if (idx !== currentIndex) {
         currentIndex = idx
+        manageImages()
 
         // Pre-fetch trigger: when within BUFFER_AHEAD of end
         const remaining = paintings.length - currentIndex - 1
@@ -492,7 +552,7 @@ async function toggleLike(idx) {
   if (nowLiked) likedSet.add(p.id)
   else likedSet.delete(p.id)
 
-  updateCardLike(idx, nowLiked)
+  updateCardLike(p.id, nowLiked)
   updateLikeCount()
 
   // Persist
@@ -506,7 +566,7 @@ async function toggleLike(idx) {
     // Revert
     if (nowLiked) likedSet.delete(p.id)
     else likedSet.add(p.id)
-    updateCardLike(idx, !nowLiked)
+    updateCardLike(p.id, !nowLiked)
     updateLikeCount()
     return
   }
@@ -523,8 +583,8 @@ async function toggleLike(idx) {
   }, 600)
 }
 
-function updateCardLike(idx, liked) {
-  const card = document.querySelectorAll('.card')[idx]
+function updateCardLike(id, liked) {
+  const card = document.querySelector(`.card[data-id="${id}"]`)
   if (!card) return
   const btn = card.querySelector('.like-btn')
   if (!btn) return

@@ -348,7 +348,7 @@ async function knnQuery(
 // ─── Quality + explore candidates ───
 
 async function getQualityCandidates(redis: any, excludeSet: Set<string>, size: number): Promise<FeedItem[]> {
-  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 299)
+  const topIds = await redis.zrevrange('stv:idx:art_score', 0, 999)
   const filtered = topIds.filter((id: string) => !excludeSet.has(id))
   return filtered.slice(0, size).map((id: string) => ({ id, reason: 'quality' as const }))
 }
