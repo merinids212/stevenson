@@ -32,6 +32,7 @@ export function parsePainting(hash: Record<string, string>, id: string): Paintin
     images: jsonParse<string[]>(hash.images) || [],
     posted: hash.posted || '',
     region: hash.region || '',
+    state: hash.state || '',
     quality_score: num(hash.quality_score),
     clip_styles: jsonParse(hash.clip_styles),
     uniqueness: num(hash.uniqueness),

@@ -5,10 +5,12 @@ Runs configured scrapers, deduplicates results, and saves to CSV/JSON.
 Optionally pushes results to Redis.
 
 Usage:
-    python scraper.py
+    python scraper.py                           # all US regions
+    python scraper.py --state ca                # California only
+    python scraper.py --state ny tx fl           # multiple states
+    python scraper.py --region losangeles        # single region
     python scraper.py --query "oil painting" --min-price 50 --max-price 5000
-    python scraper.py --output paintings.csv --json
-    python scraper.py --region losangeles --push
+    python scraper.py --push                    # scrape + push to Redis
 """
 
 import argparse
@@ -26,13 +28,13 @@ def save_csv(listings, path: Path):
         writer = csv.writer(f)
         writer.writerow([
             "id", "source", "title", "price", "url", "location",
-            "latitude", "longitude", "images", "posted", "region",
+            "latitude", "longitude", "images", "posted", "region", "state",
         ])
         for l in listings:
             writer.writerow([
                 l.id, l.source, l.title, l.price, l.url, l.location,
                 l.latitude, l.longitude,
-                "|".join(l.images), l.posted, l.region,
+                "|".join(l.images), l.posted, l.region, l.state,
             ])
     print(f"Saved {len(listings)} listings to {path}")
 
@@ -44,25 +46,34 @@ def save_json(listings, path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Scrape Craigslist California for paintings")
+    parser = argparse.ArgumentParser(description="Scrape Craigslist US for paintings")
     parser.add_argument("-q", "--query", default="painting", help="Search query (default: painting)")
     parser.add_argument("--min-price", type=int, default=None, help="Minimum price filter")
     parser.add_argument("--max-price", type=int, default=None, help="Maximum price filter")
     parser.add_argument("--no-image", action="store_true", help="Include listings without images")
     parser.add_argument("-o", "--output", default="paintings.csv", help="Output CSV file (default: paintings.csv)")
     parser.add_argument("--json", action="store_true", help="Also save as JSON")
-    parser.add_argument("--region", default=None, help="Single region to scrape (default: all California)")
+    parser.add_argument("--region", default=None, help="Single region to scrape (e.g. losangeles)")
+    parser.add_argument("--state", nargs="+", default=None, help="State(s) to scrape (e.g. ca ny tx fl)")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between regions in seconds (default: 1.0)")
     parser.add_argument("--push", action="store_true", help="Push results to Redis after saving")
     args = parser.parse_args()
 
     regions = [args.region] if args.region else None
-    label = args.region or "all California"
+    states = [s.lower() for s in args.state] if args.state else None
+
+    if args.region:
+        label = args.region
+    elif args.state:
+        label = ", ".join(s.upper() for s in states)
+    else:
+        label = "all US"
     print(f'Scraping Craigslist {label} for "{args.query}"...\n')
 
     scraper = CraigslistScraper()
     listings = scraper.scrape(
         regions=regions,
+        states=states,
         query=args.query,
         min_price=args.min_price,
         max_price=args.max_price,

@@ -96,6 +96,7 @@ def push(file_path: str = "paintings.json", flush: bool = False):
             "images": json.dumps(p.get("images", [])),
             "posted": p.get("posted", ""),
             "region": p.get("region", ""),
+            "state": p.get("state", ""),
             "quality_score": str(p["quality_score"]) if p.get("quality_score") is not None else "",
             "clip_styles": json.dumps(p["clip_styles"]) if p.get("clip_styles") is not None else "",
             "uniqueness": str(p["uniqueness"]) if p.get("uniqueness") is not None else "",
@@ -130,6 +131,11 @@ def push(file_path: str = "paintings.json", flush: bool = False):
         if region:
             pipe.zadd(f"stv:idx:region:{region}", {pid: art_score})
 
+        # State index
+        state = p.get("state", "")
+        if state:
+            pipe.zadd(f"stv:idx:state:{state}", {pid: art_score})
+
         # Source index
         pipe.zadd(f"stv:idx:source:{source}", {pid: art_score})
 
@@ -144,6 +150,7 @@ def push(file_path: str = "paintings.json", flush: bool = False):
     scored = [p for p in paintings if p.get("art_score") is not None]
     art_scores = sorted(p["art_score"] for p in scored)
     regions = {p.get("region", "") for p in paintings} - {""}
+    states = {p.get("state", "") for p in paintings} - {""}
     artists = [p for p in paintings if p.get("artist")]
     top_rated = [p for p in scored if p["art_score"] >= 55]
     gems = [p for p in paintings if p.get("value_score") is not None and p["value_score"] >= 8]
@@ -151,6 +158,7 @@ def push(file_path: str = "paintings.json", flush: bool = False):
     stats = {
         "total_listings": str(len(paintings)),
         "regions": str(len(regions)),
+        "states": str(len(states)),
         "price_min": str(min(prices)) if prices else "0",
         "price_max": str(max(prices)) if prices else "0",
         "price_median": str(prices[len(prices) // 2]) if prices else "0",

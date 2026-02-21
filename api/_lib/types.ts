@@ -9,6 +9,7 @@ export interface Painting {
   images: string[]
   posted: string
   region: string
+  state: string
   quality_score: number | null
   clip_styles: { style: string; confidence: number }[] | null
   uniqueness: number | null

@@ -700,16 +700,6 @@
   <nav id="main-nav">
     <button class="nav-menu-btn" id="menu-btn" onclick="toggleMenu()" aria-label="Menu">+</button>
     <div class="nav-center">
-      <div class="nav-filters" id="region-filters">
-        <button class="active" data-region="all">ALL</button>
-        <button data-region="losangeles">LA</button>
-        <button data-region="sfbay">SF BAY</button>
-        <button data-region="sandiego">SD</button>
-        <button data-region="sacramento">SAC</button>
-        <button data-region="orangecounty">OC</button>
-        <button data-region="inlandempire">IE</button>
-        <button data-region="santabarbara">SB</button>
-      </div>
       <div class="nav-filters" id="price-filters">
         <button class="active" data-price="all">ALL PRICES</button>
         <button data-price="under50">UNDER $50</button>
@@ -774,7 +764,6 @@
   let filtered = [];
   let currentIndex = -1;
   let currentImageIndex = 0;
-  let currentRegion = 'all';
   let currentPrice = 'all';
   let flipTimeouts = [];
 
@@ -824,10 +813,9 @@
     return clean;
   }
 
-  // Apply both region + price filters
+  // Apply price filters
   function applyFilters() {
     filtered = paintings.filter(p => {
-      if (currentRegion !== 'all' && p.region !== currentRegion) return false;
       switch (currentPrice) {
         case 'under50': return p.price !== null && p.price < 50;
         case '50to200': return p.price !== null && p.price >= 50 && p.price <= 200;
@@ -845,17 +833,6 @@
     }
     renderGrid();
   }
-
-  // Region filter click handlers
-  document.querySelectorAll('#region-filters button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentRegion = btn.dataset.region;
-      document.querySelectorAll('#region-filters button').forEach(b => {
-        b.classList.toggle('active', b.dataset.region === currentRegion);
-      });
-      applyFilters();
-    });
-  });
 
   // Price filter click handlers
   document.querySelectorAll('#price-filters button').forEach(btn => {
@@ -1209,11 +1186,7 @@
   // Go home
   function goHome() {
     closeDetail();
-    currentRegion = 'all';
     currentPrice = 'all';
-    document.querySelectorAll('#region-filters button').forEach(b => {
-      b.classList.toggle('active', b.dataset.region === 'all');
-    });
     document.querySelectorAll('#price-filters button').forEach(b => {
       b.classList.toggle('active', b.dataset.price === 'all');
     });
@@ -1251,11 +1224,7 @@
     }
     const allIdx = findPaintingById(hash);
     if (allIdx >= 0) {
-      currentRegion = 'all';
       currentPrice = 'all';
-      document.querySelectorAll('#region-filters button').forEach(b => {
-        b.classList.toggle('active', b.dataset.region === 'all');
-      });
       document.querySelectorAll('#price-filters button').forEach(b => {
         b.classList.toggle('active', b.dataset.price === 'all');
       });

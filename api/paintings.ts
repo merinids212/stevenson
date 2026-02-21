@@ -11,6 +11,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const q = req.query as Record<string, string | string[]>
 
   const region = typeof q.region === 'string' ? q.region : undefined
+  const state = typeof q.state === 'string' ? q.state : undefined
   const source = typeof q.source === 'string' ? q.source : undefined
   const sort = typeof q.sort === 'string' ? q.sort : 'art_score'
   const order = typeof q.order === 'string' ? q.order : 'desc'
@@ -24,6 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let indexKey: string
   if (region) {
     indexKey = `stv:idx:region:${region}`
+  } else if (state) {
+    indexKey = `stv:idx:state:${state}`
   } else if (source) {
     indexKey = `stv:idx:source:${source}`
   } else if (sort === 'value_score' || filter === 'gems') {

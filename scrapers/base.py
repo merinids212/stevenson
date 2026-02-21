@@ -18,6 +18,7 @@ class Listing:
     images: list[str] = field(default_factory=list)
     posted: str = ""
     region: str = ""
+    state: str = ""
 
 
 class BaseScraper(ABC):
