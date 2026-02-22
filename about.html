@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Stevenson — About</title>
-<meta name="description" content="An art discovery engine that crawls painting listings from Craigslist and eBay, scores them with computer vision, and serves a curated gallery.">
+<meta name="description" content="An art discovery engine that crawls painting listings from Craigslist and eBay, scores them with dual computer vision pipelines, and serves a curated gallery.">
 <meta property="og:title" content="Stevenson — About">
-<meta property="og:description" content="An art discovery engine that crawls painting listings from Craigslist and eBay, scores them with computer vision.">
+<meta property="og:description" content="An art discovery engine that crawls painting listings from Craigslist and eBay, scores them with dual computer vision pipelines.">
 <meta property="og:image" content="/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -70,6 +70,14 @@
     margin-bottom: 24px;
   }
 
+  .about-content code {
+    font-family: var(--font);
+    font-size: 12px;
+    background: #f5f5f5;
+    padding: 1px 5px;
+    border: 1px solid #eee;
+  }
+
   .about-content .stat {
     display: flex;
     justify-content: space-between;
@@ -104,9 +112,10 @@
 
   <p>
     An art discovery engine that continuously crawls painting listings
-    from Craigslist and eBay across the United States, scores them with
-    computer vision models, and serves a curated gallery — surfacing
-    the most interesting work from the most unexpected places.
+    from Craigslist and eBay across all 50 US states, scores them with
+    two independent computer vision pipelines, enriches them with
+    subject/mood/color metadata, and serves a curated gallery &mdash;
+    surfacing the most interesting work from the most unexpected places.
   </p>
 
   <p>
@@ -116,35 +125,78 @@
 
   <div class="about-stats" id="stats"></div>
 
-  <h2>Vision Scoring</h2>
+  <h2>Scoring Pipeline 1: CLIP + LAION</h2>
 
   <p>
-    Every painting is processed by a CLIP ViT-L/14 vision transformer to
-    extract a 768-dimensional embedding — a numerical fingerprint of
-    what the image "looks like" to a neural network. These embeddings
-    are then scored by a LAION aesthetic predictor, a model trained on
-    millions of human aesthetic preference ratings, calibrated to a
-    0–100 scale.
+    Every painting is processed by a CLIP ViT-L/14 vision transformer
+    to extract a 768-dimensional embedding. These embeddings are scored
+    by a LAION aesthetic predictor trained on millions of human aesthetic
+    preference ratings, calibrated from the raw [3, 8] output range to
+    a 0&ndash;100 scale.
   </p>
 
   <p>
-    On top of the aesthetic score, each painting is evaluated for visual
-    quality (how closely it resembles professionally photographed fine art
-    versus casual snapshots) and uniqueness (how different it is from
-    everything else in the collection, measured by cosine distance in
-    embedding space). These three signals — aesthetics, quality, and
-    uniqueness — are blended into a composite art score.
+    Two additional signals are derived from the same embeddings.
+    Quality measures cosine similarity to reference embeddings of
+    professionally photographed fine art. Uniqueness measures how
+    dissimilar a painting is from everything else in its scoring
+    chunk, computed via an N&times;N cosine distance matrix. The
+    composite art score blends all three:
+    <code>LAION&times;0.5 + quality&times;0.3 + uniqueness&times;0.2</code>.
   </p>
 
-  <h2>Style Classification</h2>
+  <h2>Scoring Pipeline 2: TOPIQ + MUSIQ</h2>
 
   <p>
-    CLIP's zero-shot classification capability is used to identify
-    the medium and style of each painting — oil, watercolor, acrylic,
-    pastel, ink, digital, and others — along with subject matter like
-    landscape, portrait, abstract, and still life. Artist names are
-    parsed from listing titles using pattern matching. Together,
-    these labels power the analytics breakdowns and filtered views.
+    An independent second opinion. TOPIQ-IAA is a CFANet-based model
+    trained on image aesthetic assessment, outputting mean opinion
+    scores on a 1&ndash;5 scale. MUSIQ is a multi-scale image quality
+    transformer trained on the AVA dataset &mdash; 250,000+ photographs
+    rated by amateur photographers &mdash; outputting scores on a
+    1&ndash;10 scale. Both are normalized to 0&ndash;100 and blended
+    50/50 into an <code>aesthetic2</code> score.
+  </p>
+
+  <p>
+    The two pipelines are trained on different data, optimize for
+    different objectives, and disagree on ~30% of paintings. The
+    analytics dashboard plots art score against aesthetic2 &mdash;
+    paintings where both agree are safe bets; paintings where they
+    disagree are the interesting ones worth investigating.
+  </p>
+
+  <h2>Enrichment</h2>
+
+  <p>
+    After scoring, a second pass enriches each painting with structured
+    metadata. CLIP zero-shot classification runs the image against
+    prompt dictionaries for 10 subjects (portrait, landscape, abstract,
+    seascape, still life, etc.), 6 moods (serene, dramatic, mysterious,
+    melancholy, joyful, romantic), and 6 mediums (oil, watercolor,
+    acrylic, pastel, ink, mixed media). Each tag carries a confidence
+    score from softmax over the prompt set.
+  </p>
+
+  <p>
+    Dominant colors are extracted via MiniBatchKMeans clustering on the
+    downsampled image (5 clusters, 100&times;100px). Each cluster center
+    maps to a hex value, RGB triple, and percentage of image area. The
+    clusters are then categorized into named colors (red, blue, teal,
+    etc.) and tone tags (warm, cool, dark, light, muted, vivid) using
+    HSL-space hue ranges and saturation/lightness thresholds.
+  </p>
+
+  <h2>Search</h2>
+
+  <p>
+    The gallery supports deep search over 200+ terms &mdash; subjects,
+    styles, moods, colors, art movements, objects, compositions,
+    and artist style references. Each search term is pre-encoded with
+    CLIP's text encoder into the same 768-dimensional embedding space
+    as the paintings. Search computes cosine similarity between the
+    query embedding and every painting's stored embedding via
+    RediSearch's HNSW vector index, returning the nearest neighbors
+    in real time.
   </p>
 
   <h2>Taste Learning</h2>
@@ -153,22 +205,22 @@
     The feed learns from your likes in real time. As you heart paintings,
     the system builds a taste profile from the CLIP embeddings of
     your liked works. When you've liked enough paintings, the algorithm
-    identifies distinct "poles" in your taste — maybe you're drawn to both
-    moody seascapes and vibrant street scenes — and queries each pole
-    separately, ensuring your feed stays diverse rather than collapsing
-    into a single aesthetic.
+    identifies distinct "poles" in your taste &mdash; maybe you're drawn
+    to both moody seascapes and vibrant street scenes &mdash; and queries
+    each pole separately, ensuring your feed stays diverse rather than
+    collapsing into a single aesthetic.
   </p>
 
   <p>
-    Style affinity and price range are used as light signals — gentle
-    nudges within small windows, never hard filters — so the feed
-    feels personalized without becoming a filter bubble.
+    Style affinity and price range are used as light signals &mdash;
+    gentle nudges within small windows, never hard filters &mdash; so
+    the feed feels personalized without becoming a filter bubble.
   </p>
 
   <h2>Gem Finding</h2>
 
   <p>
-    A value score identifies underpriced work — paintings with high
+    A value score identifies underpriced work &mdash; paintings with high
     aesthetic quality relative to their asking price. The GEMS filter
     surfaces these finds: technically accomplished paintings that
     happen to be listed cheaply, often by sellers who don't know
@@ -182,22 +234,34 @@
     using UMAP (Uniform Manifold Approximation and Projection), a
     manifold learning technique that preserves the local neighborhood
     structure of high-dimensional data. The result is a navigable 3D
-    point cloud where similar paintings cluster together — oil landscapes
-    in one region, abstract acrylics in another, portraits forming
-    their own galaxy. Your liked paintings appear as bright red dots,
-    revealing the shape of your taste in embedding space.
+    point cloud where similar paintings cluster together &mdash; oil
+    landscapes in one region, abstract acrylics in another, portraits
+    forming their own galaxy. Your liked paintings appear as bright
+    red dots, revealing the shape of your taste in embedding space.
   </p>
 
   <h2>Infrastructure</h2>
 
   <p>
-    Crawlers run on a schedule, collecting new listings and deduplicating
-    against existing data. Scoring runs on Apple Silicon using Metal
-    Performance Shaders for GPU-accelerated inference. All painting data,
-    scores, embeddings, and UMAP coordinates are stored in Redis with
-    sorted set indexes for fast filtered queries. The frontend is static
-    HTML served by Vercel with serverless TypeScript API functions.
-    No build step, no framework — just HTML, CSS, and JavaScript.
+    Crawlers are generator-based &mdash; each region or query yields
+    batches of listings as they arrive, enabling streaming scoring
+    where models load once and process batches incrementally rather
+    than waiting for all scraping to finish. Craigslist is scraped
+    across 400+ regions in all 50 states with multi-query rotation
+    and pagination. eBay is scraped via headless Chromium with
+    randomized sort orders, page ranges, and human-like delays.
+  </p>
+
+  <p>
+    Scoring and enrichment run on Apple Silicon using Metal Performance
+    Shaders for GPU-accelerated inference. Four models run in sequence
+    per painting: CLIP ViT-L/14, LAION aesthetic MLP, TOPIQ-IAA, and
+    MUSIQ-AVA. All painting data, scores, embeddings, and search
+    vocabulary are stored in a single Redis instance with sorted set
+    indexes for filtered queries and an HNSW vector index for
+    similarity search. The frontend is static HTML served by Vercel
+    with serverless TypeScript API functions. No build step, no
+    framework.
   </p>
 
 </div>
@@ -209,14 +273,14 @@
       const stats = [
         ['Total listings', parseInt(s.total_listings).toLocaleString()],
         ['Sources', 'Craigslist + eBay'],
-        ['Regions', s.regions],
+        ['Coverage', '50 US states'],
         ['Price range', `$${parseFloat(s.price_min).toLocaleString()} \u2014 $${parseFloat(s.price_max).toLocaleString()}`],
         ['Median price', `$${parseFloat(s.price_median).toLocaleString()}`],
         ['Vision scored', parseInt(s.scored_count).toLocaleString()],
         ['Artists identified', parseInt(s.artists_count).toLocaleString()],
-        ['Vision model', 'CLIP ViT-L/14'],
-        ['Aesthetic model', 'LAION Improved Aesthetic Predictor'],
+        ['Scoring models', 'CLIP ViT-L/14 + LAION + TOPIQ + MUSIQ'],
         ['Embedding dimensions', '768'],
+        ['Search vocabulary', '200+ terms'],
       ];
 
       const container = document.getElementById('stats');
