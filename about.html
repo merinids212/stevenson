@@ -189,14 +189,13 @@
   <h2>Search</h2>
 
   <p>
-    The gallery supports deep search over 200+ terms &mdash; subjects,
-    styles, moods, colors, art movements, objects, compositions,
-    and artist style references. Each search term is pre-encoded with
-    CLIP's text encoder into the same 768-dimensional embedding space
-    as the paintings. Search computes cosine similarity between the
-    query embedding and every painting's stored embedding via
-    RediSearch's HNSW vector index, returning the nearest neighbors
-    in real time.
+    Search operates in CLIP's embedding space, not on keywords. Over
+    200 terms &mdash; subjects, styles, moods, colors, art movements,
+    compositions, artist style references &mdash; are pre-encoded with
+    CLIP's text encoder into the same 768-dimensional space as the
+    paintings. Typing "stormy impressionist seascape" finds paintings
+    that look like that description, even if the listing title just
+    says "old painting $40."
   </p>
 
   <h2>Taste Learning</h2>
@@ -240,28 +239,16 @@
     red dots, revealing the shape of your taste in embedding space.
   </p>
 
-  <h2>Infrastructure</h2>
+  <h2>Pipeline</h2>
 
   <p>
-    Crawlers are generator-based &mdash; each region or query yields
-    batches of listings as they arrive, enabling streaming scoring
-    where models load once and process batches incrementally rather
-    than waiting for all scraping to finish. Craigslist is scraped
-    across 400+ regions in all 50 states with multi-query rotation
-    and pagination. eBay is scraped via headless Chromium with
-    randomized sort orders, page ranges, and human-like delays.
-  </p>
-
-  <p>
-    Scoring and enrichment run on Apple Silicon using Metal Performance
-    Shaders for GPU-accelerated inference. Four models run in sequence
-    per painting: CLIP ViT-L/14, LAION aesthetic MLP, TOPIQ-IAA, and
-    MUSIQ-AVA. All painting data, scores, embeddings, and search
-    vocabulary are stored in a single Redis instance with sorted set
-    indexes for filtered queries and an HNSW vector index for
-    similarity search. The frontend is static HTML served by Vercel
-    with serverless TypeScript API functions. No build step, no
-    framework.
+    The crawlers are generator-based &mdash; each region or query
+    yields batches of listings as they arrive, and scoring begins
+    immediately on the first batch while scraping continues in
+    parallel. Four models run in sequence per painting: CLIP ViT-L/14,
+    LAION aesthetic MLP, TOPIQ-IAA, and MUSIQ-AVA. eBay is scraped
+    via headless Chromium with randomized sort orders, page offsets,
+    and human-like timing jitter to avoid detection.
   </p>
 
 </div>
@@ -279,8 +266,6 @@
         ['Vision scored', parseInt(s.scored_count).toLocaleString()],
         ['Artists identified', parseInt(s.artists_count).toLocaleString()],
         ['Scoring models', 'CLIP ViT-L/14 + LAION + TOPIQ + MUSIQ'],
-        ['Embedding dimensions', '768'],
-        ['Search vocabulary', '200+ terms'],
       ];
 
       const container = document.getElementById('stats');
