@@ -76,6 +76,14 @@ def push_paintings(paintings: list[dict], r):
             "artist_confidence": str(p["artist_confidence"]) if p.get("artist_confidence") is not None else "",
             "value_score": str(p["value_score"]) if p.get("value_score") is not None else "",
             "aesthetic_score": str(p["aesthetic_score"]) if p.get("aesthetic_score") is not None else "",
+            "topiq_score": str(p["topiq_score"]) if p.get("topiq_score") is not None else "",
+            "musiq_score": str(p["musiq_score"]) if p.get("musiq_score") is not None else "",
+            "aesthetic2": str(p["aesthetic2"]) if p.get("aesthetic2") is not None else "",
+            "subjects": json.dumps(p["subjects"]) if p.get("subjects") is not None else "",
+            "moods": json.dumps(p["moods"]) if p.get("moods") is not None else "",
+            "medium_tags": json.dumps(p["medium_tags"]) if p.get("medium_tags") is not None else "",
+            "colors": json.dumps(p["colors"]) if p.get("colors") is not None else "",
+            "color_tags": json.dumps(p["color_tags"]) if p.get("color_tags") is not None else "",
             "source": source,
             "external_id": ext_id,
         }
@@ -101,6 +109,24 @@ def push_paintings(paintings: list[dict], r):
             pipe.zadd(f"stv:idx:state:{state}", {pid: art_score})
 
         pipe.zadd(f"stv:idx:source:{source}", {pid: art_score})
+
+        # Tag indexes
+        if p.get("subjects"):
+            for s in p["subjects"]:
+                tag = s["tag"] if isinstance(s, dict) else s
+                pipe.zadd(f"stv:idx:subject:{tag}", {pid: art_score})
+        if p.get("moods"):
+            for m in p["moods"]:
+                tag = m["tag"] if isinstance(m, dict) else m
+                pipe.zadd(f"stv:idx:mood:{tag}", {pid: art_score})
+        if p.get("medium_tags"):
+            for m in p["medium_tags"]:
+                tag = m["tag"] if isinstance(m, dict) else m
+                pipe.zadd(f"stv:idx:medium:{tag}", {pid: art_score})
+        if p.get("color_tags"):
+            for ct in (p["color_tags"] if isinstance(p["color_tags"], list) else []):
+                pipe.zadd(f"stv:idx:color:{ct}", {pid: art_score})
+
         pushed += 1
 
     pipe.execute()

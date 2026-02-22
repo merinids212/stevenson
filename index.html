@@ -153,6 +153,9 @@
       white-space: nowrap;
     }
 
+    .search-input { width: 120px; }
+    .tag-filters { padding: 2px 16px 4px; gap: 6px; }
+
     .grid-item { padding: 4px 2px 6px; }
     .grid-item-title { font-size: 9px; margin-top: 4px; }
 
@@ -634,6 +637,111 @@
       transform: translateY(0);
     }
   }
+
+  /* ─── SEARCH ─── */
+  .search-toggle {
+    font-family: var(--font);
+    font-size: 11px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray);
+    padding: 2px 1px;
+    transition: color 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .search-toggle:hover { color: var(--black); }
+
+  .search-input-wrap {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  .search-input-wrap.active { display: flex; }
+
+  .search-input {
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    border: none;
+    border-bottom: 1px solid var(--light-gray);
+    background: none;
+    color: var(--black);
+    padding: 2px 0;
+    outline: none;
+    width: 180px;
+    text-transform: uppercase;
+  }
+  .search-input::placeholder {
+    color: var(--light-gray);
+    text-transform: uppercase;
+  }
+  .search-clear {
+    font-family: var(--font);
+    font-size: 13px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray);
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .search-clear:hover { color: var(--black); }
+
+  /* ─── TAG CHIPS ─── */
+  .tag-filters {
+    position: fixed;
+    top: calc(48px + 26px + env(safe-area-inset-top, 0px));
+    left: 0;
+    width: 100%;
+    background: var(--white);
+    z-index: 98;
+    display: none;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 2px 60px 4px;
+  }
+  .tag-filters.visible { display: flex; }
+
+  .tag-chip {
+    font-family: var(--font);
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--light-gray);
+    border-radius: 12px;
+    padding: 2px 8px;
+    cursor: pointer;
+    color: var(--gray);
+    transition: all 0.2s;
+  }
+  .tag-chip:hover { color: var(--black); border-color: var(--black); }
+  .tag-chip.active { color: var(--black); border-color: var(--black); background: #f5f5f5; }
+
+  /* ─── COLOR SWATCHES (detail) ─── */
+  .detail-colors {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin: 8px 0;
+  }
+  .color-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid #eee;
+  }
+
+  .detail-tags {
+    font-size: 10px;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+  }
 </style>
 </head>
 <body>
@@ -653,6 +761,32 @@
     <button data-price="200to1000">$200–1K</button>
     <button data-price="over1000">$1K+</button>
     <button data-price="foryou" style="display:none;">FOR YOU</button>
+    <button class="search-toggle" onclick="openSearch()">SEARCH</button>
+    <div class="search-input-wrap" id="search-wrap">
+      <input class="search-input" id="search-input" type="text" placeholder="Search..."
+             onkeydown="if(event.key==='Enter')doSearch()" autocomplete="off">
+      <button class="search-clear" onclick="clearSearch()">&times;</button>
+    </div>
+  </div>
+
+  <!-- TAG FILTERS -->
+  <div class="tag-filters" id="tag-filters">
+    <button class="tag-chip" data-filter="subject" data-value="portrait">portrait</button>
+    <button class="tag-chip" data-filter="subject" data-value="landscape">landscape</button>
+    <button class="tag-chip" data-filter="subject" data-value="abstract">abstract</button>
+    <button class="tag-chip" data-filter="subject" data-value="still_life">still life</button>
+    <button class="tag-chip" data-filter="subject" data-value="figure">figure</button>
+    <button class="tag-chip" data-filter="subject" data-value="floral">floral</button>
+    <button class="tag-chip" data-filter="subject" data-value="seascape">seascape</button>
+    <button class="tag-chip" data-filter="medium" data-value="oil">oil</button>
+    <button class="tag-chip" data-filter="medium" data-value="watercolor">watercolor</button>
+    <button class="tag-chip" data-filter="medium" data-value="acrylic">acrylic</button>
+    <button class="tag-chip" data-filter="color" data-value="blue">blue</button>
+    <button class="tag-chip" data-filter="color" data-value="red">red</button>
+    <button class="tag-chip" data-filter="color" data-value="green">green</button>
+    <button class="tag-chip" data-filter="color" data-value="warm">warm</button>
+    <button class="tag-chip" data-filter="color" data-value="cool">cool</button>
+    <button class="tag-chip" data-filter="color" data-value="dark">dark</button>
   </div>
 
   <!-- SPINNER -->
@@ -694,6 +828,8 @@
           <div class="detail-artist" id="detail-artist"></div>
           <div class="detail-score" id="detail-score"></div>
           <div class="detail-value" id="detail-value"></div>
+          <div class="detail-tags" id="detail-tags"></div>
+          <div class="detail-colors" id="detail-colors"></div>
           <div class="detail-location" id="detail-location"></div>
         </div>
       </div>
@@ -834,6 +970,7 @@
 
   // Apply price filters — fetches from API with server-side filtering
   function applyFilters() {
+    updateTagVisibility();
     fetchPaintings();
   }
 
@@ -844,6 +981,19 @@
       document.querySelectorAll('#price-filters button').forEach(b => {
         b.classList.toggle('active', b.dataset.price === currentPrice);
       });
+      // Clear search and tag state on price filter change
+      if (searchMode) {
+        searchMode = false;
+        const wrap = document.getElementById('search-wrap');
+        const toggle = document.querySelector('.search-toggle');
+        document.getElementById('search-input').value = '';
+        wrap.classList.remove('active');
+        toggle.style.display = '';
+      }
+      if (activeTag) {
+        activeTag = null;
+        document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+      }
       applyFilters();
     });
   });
@@ -928,6 +1078,32 @@
     } else {
       valueEl.textContent = '';
       valueEl.style.display = 'none';
+    }
+
+    // Tags (subjects, mood, medium)
+    const tagsEl = document.getElementById('detail-tags');
+    if (tagsEl) {
+      const tags = [];
+      if (painting.subjects) painting.subjects.forEach(s => tags.push(s.tag));
+      if (painting.moods) painting.moods.forEach(m => tags.push(m.tag));
+      if (painting.medium_tags) painting.medium_tags.forEach(m => tags.push(m.tag));
+      tagsEl.textContent = tags.join(' \u00b7 ');
+      tagsEl.style.display = tags.length ? '' : 'none';
+    }
+
+    // Color swatches
+    const colorsEl = document.getElementById('detail-colors');
+    if (colorsEl) {
+      colorsEl.innerHTML = '';
+      if (painting.colors && painting.colors.length) {
+        painting.colors.forEach(c => {
+          const swatch = document.createElement('div');
+          swatch.className = 'color-swatch';
+          swatch.style.backgroundColor = c.hex;
+          swatch.title = c.hex + ' (' + Math.round(c.pct * 100) + '%)';
+          colorsEl.appendChild(swatch);
+        });
+      }
     }
 
     // Reset expand
@@ -1321,6 +1497,10 @@
 
   // Keyboard nav
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && searchMode) {
+      clearSearch();
+      return;
+    }
     if (e.key === 'Escape') {
       if (document.getElementById('detail-view').classList.contains('active')) {
         closeDetail();
@@ -1444,6 +1624,100 @@
 
   // Load likes on startup
   fetchLikes();
+
+  // ─── SEARCH ───
+  let searchMode = false;
+  let activeTag = null;
+
+  function openSearch() {
+    const wrap = document.getElementById('search-wrap');
+    const toggle = document.querySelector('.search-toggle');
+    wrap.classList.add('active');
+    toggle.style.display = 'none';
+    document.getElementById('search-input').focus();
+  }
+
+  function clearSearch() {
+    const wrap = document.getElementById('search-wrap');
+    const toggle = document.querySelector('.search-toggle');
+    const input = document.getElementById('search-input');
+    input.value = '';
+    wrap.classList.remove('active');
+    toggle.style.display = '';
+    if (searchMode) {
+      searchMode = false;
+      updateTagVisibility();
+      fetchPaintings();
+    }
+  }
+
+  function doSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    if (!q) return;
+    searchMode = true;
+    updateTagVisibility();
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+    document.getElementById('loading-spinner').classList.remove('hidden');
+
+    fetch('/api/search?q=' + encodeURIComponent(q), { signal: fetchController.signal })
+      .then(r => r.json())
+      .then(data => {
+        paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+        filtered = [...paintings];
+        document.getElementById('nav-count').textContent =
+          filtered.length + ' results for \u201c' + q + '\u201d';
+        renderGrid();
+      })
+      .catch(e => { if (e.name !== 'AbortError') console.error(e); });
+  }
+
+  // ─── TAG CHIPS ───
+  function updateTagVisibility() {
+    const tagBar = document.getElementById('tag-filters');
+    if (tagBar) {
+      tagBar.classList.toggle('visible', currentPrice === 'all' && !searchMode);
+    }
+  }
+
+  // Show tags on initial load
+  updateTagVisibility();
+
+  document.querySelectorAll('.tag-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const filterType = chip.dataset.filter;
+      const value = chip.dataset.value;
+
+      if (activeTag === filterType + ':' + value) {
+        // Deselect
+        activeTag = null;
+        chip.classList.remove('active');
+        fetchPaintings();
+      } else {
+        // Select
+        activeTag = filterType + ':' + value;
+        document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+
+        // Fetch with tag filter
+        if (fetchController) fetchController.abort();
+        fetchController = new AbortController();
+        document.getElementById('loading-spinner').classList.remove('hidden');
+
+        fetch('/api/paintings?' + filterType + '=' + encodeURIComponent(value),
+              { signal: fetchController.signal })
+          .then(r => r.json())
+          .then(data => {
+            paintings = data.paintings.filter(p => p.images && p.images.length > 0);
+            filtered = [...paintings];
+            const displayTotal = data.totalIndex || filtered.length;
+            document.getElementById('nav-count').textContent = displayTotal.toLocaleString() + ' Objects';
+            renderGrid();
+          })
+          .catch(e => { if (e.name !== 'AbortError') console.error(e); });
+      }
+    });
+  });
 </script>
 <script src="stv-nav.js"></script>
 </body>

@@ -20,10 +20,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const minPrice = typeof q.min_price === 'string' ? parseFloat(q.min_price) : undefined
   const maxPrice = typeof q.max_price === 'string' ? parseFloat(q.max_price) : undefined
   const filter = typeof q.filter === 'string' ? q.filter : undefined
+  const subject = typeof q.subject === 'string' ? q.subject : undefined
+  const mood = typeof q.mood === 'string' ? q.mood : undefined
+  const medium = typeof q.medium === 'string' ? q.medium : undefined
+  const color = typeof q.color === 'string' ? q.color : undefined
 
   // Choose the right sorted index
   let indexKey: string
-  if (region) {
+  if (subject) {
+    indexKey = `stv:idx:subject:${subject}`
+  } else if (mood) {
+    indexKey = `stv:idx:mood:${mood}`
+  } else if (medium) {
+    indexKey = `stv:idx:medium:${medium}`
+  } else if (color) {
+    indexKey = `stv:idx:color:${color}`
+  } else if (region) {
     indexKey = `stv:idx:region:${region}`
   } else if (state) {
     indexKey = `stv:idx:state:${state}`

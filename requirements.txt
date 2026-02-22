@@ -1,3 +1,5 @@
 requests
 beautifulsoup4
 redis
+pyiqa
+scikit-learn

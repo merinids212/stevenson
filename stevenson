@@ -7,6 +7,7 @@ Usage:
     stevenson pull --ebay           Pull from eBay only
     stevenson pull --cl             Pull from Craigslist only
     stevenson score                 Stream-score paintings, push chunks to Redis
+    stevenson enrich                Enrich scored paintings (pyiqa, tags, colors)
     stevenson push                  Push paintings.json to Redis
     stevenson update                Full pipeline: pull → score → push
     stevenson status                Show store + Redis stats
@@ -24,6 +25,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 os.chdir(PROJECT_ROOT)
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Line-buffered stdout so output streams immediately
+sys.stdout.reconfigure(line_buffering=True)
 
 
 # ─── Helpers ───
@@ -83,6 +87,9 @@ def cmd_pull(args):
         ebay_queries=args.ebay_queries,
         num_queries=args.num_queries,
         max_pages=args.max_pages,
+        cl_queries=getattr(args, "cl_queries", None),
+        num_cl_queries=getattr(args, "num_cl_queries", None),
+        cl_max_pages=getattr(args, "cl_max_pages", 3),
     )
 
     total_new = 0
@@ -94,15 +101,20 @@ def cmd_pull(args):
         print(f"  Store: {len(known_ids):,} existing listings")
         print(f"  Runs:  {store['meta'].get('total_runs', 0)}\n")
 
-        listings = run_ebay(scraper_args, known_ids)
-        if listings:
-            new, updated = merge_into_store(store, listings)
+        src_new = src_updated = 0
+        for batch in run_ebay(scraper_args, known_ids):
+            new, updated = merge_into_store(store, batch)
+            src_new += new
+            src_updated += updated
             store["meta"]["last_run"] = now
-            store["meta"]["total_runs"] += 1
-            store["meta"]["total_scraped"] += len(listings)
+            store["meta"]["total_scraped"] += len(batch)
             save_store("ebay", store)
-            total_new += new
-            print(f"\n  {green(f'+{new} new')}, {updated} refreshed, "
+            print(f"  +{new} saved ({src_new} total new)")
+        if src_new or src_updated:
+            store["meta"]["total_runs"] += 1
+            save_store("ebay", store)
+            total_new += src_new
+            print(f"\n  {green(f'+{src_new} new')}, {src_updated} refreshed, "
                   f"{len(store['listings']):,} total")
         else:
             print(f"  No new listings found")
@@ -114,15 +126,20 @@ def cmd_pull(args):
         print(f"  Store: {len(known_ids):,} existing listings")
         print(f"  Runs:  {store['meta'].get('total_runs', 0)}\n")
 
-        listings = run_craigslist(scraper_args, known_ids)
-        if listings:
-            new, updated = merge_into_store(store, listings)
+        src_new = src_updated = 0
+        for batch in run_craigslist(scraper_args, known_ids):
+            new, updated = merge_into_store(store, batch)
+            src_new += new
+            src_updated += updated
             store["meta"]["last_run"] = now
-            store["meta"]["total_runs"] += 1
-            store["meta"]["total_scraped"] += len(listings)
+            store["meta"]["total_scraped"] += len(batch)
             save_store("craigslist", store)
-            total_new += new
-            print(f"\n  {green(f'+{new} new')}, {updated} refreshed, "
+            print(f"  +{new} saved ({src_new} total new)")
+        if src_new or src_updated:
+            store["meta"]["total_runs"] += 1
+            save_store("craigslist", store)
+            total_new += src_new
+            print(f"\n  {green(f'+{src_new} new')}, {src_updated} refreshed, "
                   f"{len(store['listings']):,} total")
         else:
             print(f"  No new listings found")
@@ -180,6 +197,28 @@ def cmd_embed(args):
     return True
 
 
+def cmd_enrich(args):
+    """Run enrichment pipeline on scored paintings."""
+    heading("Enriching paintings")
+
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print(red("  PyTorch not installed — enrichment requires torch + open_clip"))
+        print(dim("  pip install torch open_clip_torch pillow pyiqa scikit-learn"))
+        return False
+
+    from enrich import enrich_paintings
+
+    enrich_paintings(
+        limit=args.limit,
+        force=args.force,
+        chunk_size=args.chunk_size,
+        no_push=args.no_push,
+    )
+    return True
+
+
 def cmd_push(args):
     """Push paintings.json to Redis."""
     heading("Pushing to Redis")
@@ -196,6 +235,9 @@ def cmd_push(args):
 
 def cmd_update(args):
     """Full pipeline: pull → export → score → push."""
+    if getattr(args, "stream", False):
+        return cmd_update_stream(args)
+
     heading("STEVENSON UPDATE")
     print(f"  {dim(datetime.now().strftime('%Y-%m-%d %H:%M'))}")
 
@@ -225,6 +267,105 @@ def cmd_update(args):
 
     heading("Done")
     print(f"  {green(f'{count:,} paintings live')}")
+
+
+def cmd_update_stream(args):
+    """Streaming pipeline: scrape → score → push incrementally per batch."""
+    heading("STEVENSON UPDATE (streaming)")
+    print(f"  {dim(datetime.now().strftime('%Y-%m-%d %H:%M'))}")
+
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        print(red("  PyTorch not installed — streaming requires torch + open_clip"))
+        print(dim("  pip install torch open_clip_torch pillow"))
+        return
+
+    from scraper import (
+        load_store, save_store, merge_into_store,
+        run_craigslist, run_ebay,
+    )
+    from scorer import StreamingScorer
+
+    now = datetime.now(timezone.utc).isoformat()
+    sources = []
+    if args.ebay or (not args.cl and not args.ebay):
+        sources.append("ebay")
+    if args.cl or (not args.cl and not args.ebay):
+        sources.append("craigslist")
+
+    # Build scraper args
+    scraper_args = argparse.Namespace(
+        query=args.query or "painting",
+        min_price=args.min_price,
+        max_price=args.max_price,
+        no_image=False,
+        region=None,
+        state=args.state,
+        delay=1.0,
+        delay_ebay=2.0,
+        ebay_queries=args.ebay_queries,
+        num_queries=args.num_queries,
+        max_pages=args.max_pages,
+        cl_queries=getattr(args, "cl_queries", None),
+        num_cl_queries=getattr(args, "num_cl_queries", None),
+        cl_max_pages=getattr(args, "cl_max_pages", 3),
+    )
+
+    # Load models + Redis once up front
+    scorer = StreamingScorer(chunk_size=args.chunk_size)
+
+    total_new = 0
+    for source_name in sources:
+        if source_name == "ebay":
+            heading("Pulling from eBay (streaming)")
+            run_fn = run_ebay
+        else:
+            heading("Pulling from Craigslist (streaming)")
+            run_fn = run_craigslist
+
+        store = load_store(source_name)
+        scorer.register_store(source_name, store)
+        known_ids = set(store["listings"].keys())
+        print(f"  Store: {len(known_ids):,} existing listings\n")
+
+        src_new = 0
+        for batch in run_fn(scraper_args, known_ids):
+            existing_ids = set(store["listings"].keys())
+            new, updated = merge_into_store(store, batch)
+            src_new += new
+            store["meta"]["last_run"] = now
+            store["meta"]["total_scraped"] += len(batch)
+            save_store(source_name, store)
+
+            # Feed new paintings to scorer buffer
+            new_items = [
+                (pid, store["listings"][pid])
+                for pid in set(store["listings"]) - existing_ids
+            ]
+            if new_items:
+                scorer.add(source_name, new_items)
+                print(f"  +{new} scraped, {len(scorer.buffer)} buffered")
+
+        if src_new:
+            store["meta"]["total_runs"] += 1
+            save_store(source_name, store)
+            total_new += src_new
+            print(f"\n  {green(f'+{src_new} new')} from {source_name}")
+        else:
+            print(f"  No new listings from {source_name}")
+
+    # Score any remaining paintings in buffer
+    scorer.flush()
+    scorer.finalize()
+
+    # Final export
+    count = cmd_export(args)
+
+    heading("Done (streaming)")
+    print(f"  {green(f'{total_new} new paintings scraped')}")
+    if scorer.total_scored:
+        print(f"  {green(f'{scorer.total_scored} scored & pushed to Redis')}")
 
 
 def cmd_status(args):
@@ -426,6 +567,7 @@ def main():
 commands:
   pull      Scrape new paintings from eBay / Craigslist
   score     Run CLIP aesthetic scorer on paintings.json
+  enrich    Run enrichment pipeline (pyiqa, tags, colors)
   embed     Backfill CLIP embeddings for recommendations
   push      Push paintings.json to Redis
   update    Full pipeline: pull → export → score → push
@@ -450,6 +592,12 @@ commands:
                         help="Max eBay pages per query (default: 5)")
     p_pull.add_argument("--min-price", type=int, default=None)
     p_pull.add_argument("--max-price", type=int, default=None)
+    p_pull.add_argument("--cl-queries", nargs="+", default=None,
+                        help="Explicit CL queries (overrides --query)")
+    p_pull.add_argument("--num-cl-queries", type=int, default=None,
+                        help="Pick N random queries from CL query pool")
+    p_pull.add_argument("--cl-max-pages", type=int, default=3,
+                        help="Max CL pages per region/query (default: 3)")
 
     # export
     sub.add_parser("export", help="Merge stores → paintings.json")
@@ -464,6 +612,17 @@ commands:
                          help="Paintings per chunk (default: 200)")
     p_score.add_argument("--no-push", action="store_true",
                          help="Score without pushing to Redis")
+
+    # enrich
+    p_enrich = sub.add_parser("enrich", help="Run enrichment pipeline (pyiqa, tags, colors)")
+    p_enrich.add_argument("--limit", type=int, default=None,
+                          help="Enrich only first N paintings")
+    p_enrich.add_argument("--force", action="store_true",
+                          help="Re-enrich all paintings (ignore existing enrichment)")
+    p_enrich.add_argument("--chunk-size", type=int, default=200,
+                          help="Paintings per chunk (default: 200)")
+    p_enrich.add_argument("--no-push", action="store_true",
+                          help="Enrich without pushing to Redis")
 
     # push
     p_push = sub.add_parser("push", help="Push to Redis")
@@ -481,6 +640,14 @@ commands:
     p_update.add_argument("--max-pages", type=int, default=5)
     p_update.add_argument("--min-price", type=int, default=None)
     p_update.add_argument("--max-price", type=int, default=None)
+    p_update.add_argument("--cl-queries", nargs="+", default=None,
+                        help="Explicit CL queries")
+    p_update.add_argument("--num-cl-queries", type=int, default=None,
+                        help="Pick N random queries from CL query pool")
+    p_update.add_argument("--cl-max-pages", type=int, default=3,
+                        help="Max CL pages per region/query (default: 3)")
+    p_update.add_argument("--stream", action="store_true",
+                          help="Streaming mode: score & push as paintings arrive")
     p_update.add_argument("--no-score", action="store_true",
                           help="Skip CLIP scoring (faster)")
     p_update.add_argument("--flush", action="store_true",
@@ -516,6 +683,7 @@ commands:
         "pull": cmd_pull,
         "export": cmd_export,
         "score": cmd_score,
+        "enrich": cmd_enrich,
         "embed": cmd_embed,
         "push": cmd_push,
         "update": cmd_update,

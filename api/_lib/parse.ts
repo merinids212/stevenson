@@ -6,6 +6,8 @@ export const PAINTING_FIELDS = [
   'images', 'posted', 'region', 'state', 'quality_score',
   'clip_styles', 'uniqueness', 'art_score', 'artist',
   'artist_confidence', 'value_score', 'aesthetic_score',
+  'topiq_score', 'musiq_score', 'aesthetic2',
+  'subjects', 'moods', 'medium_tags', 'colors', 'color_tags',
 ] as const
 
 export function hmgetToHash(values: (string | null)[]): Record<string, string> {
@@ -80,5 +82,13 @@ export function parsePainting(hash: Record<string, string>, id: string): Paintin
     artist_confidence: num(hash.artist_confidence),
     value_score: num(hash.value_score),
     aesthetic_score: num(hash.aesthetic_score),
+    topiq_score: num(hash.topiq_score),
+    musiq_score: num(hash.musiq_score),
+    aesthetic2: num(hash.aesthetic2),
+    subjects: jsonParse(hash.subjects),
+    moods: jsonParse(hash.moods),
+    medium_tags: jsonParse(hash.medium_tags),
+    colors: jsonParse(hash.colors),
+    color_tags: jsonParse(hash.color_tags),
   }
 }

@@ -18,6 +18,14 @@ export interface Painting {
   artist_confidence: number | null
   value_score: number | null
   aesthetic_score: number | null
+  topiq_score: number | null
+  musiq_score: number | null
+  aesthetic2: number | null
+  subjects: { tag: string; confidence: number }[] | null
+  moods: { tag: string; confidence: number }[] | null
+  medium_tags: { tag: string; confidence: number }[] | null
+  colors: { hex: string; rgb: number[]; pct: number }[] | null
+  color_tags: string[] | null
 }
 
 export interface Stats {
