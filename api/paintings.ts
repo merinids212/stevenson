@@ -10,6 +10,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const redis = getRedis()
   const q = req.query as Record<string, string | string[]>
 
+  // Fast path: fetch specific paintings by ID list
+  const idsParam = typeof q.ids === 'string' ? q.ids : undefined
+  if (idsParam) {
+    const requestedIds = idsParam.split(',').filter(Boolean).slice(0, 100)
+    if (!requestedIds.length) return res.json({ paintings: [], total: 0 })
+
+    const pipe = redis.pipeline()
+    for (const id of requestedIds) {
+      pipe.hmget(`stv:p:${id}`, ...PAINTING_FIELDS)
+    }
+    const results = await pipe.exec()
+
+    const paintings = (results || [])
+      .map(([err, data], i) => {
+        if (err || !data || !Array.isArray(data)) return null
+        const hash = hmgetToHash(data as (string | null)[])
+        if (!Object.keys(hash).length) return null
+        return parsePainting(hash, requestedIds[i])
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .filter(p => p.images.length > 0)
+
+    res.setHeader('Cache-Control', 'no-cache')
+    return res.json({ paintings, total: paintings.length })
+  }
+
   const region = typeof q.region === 'string' ? q.region : undefined
   const state = typeof q.state === 'string' ? q.state : undefined
   const source = typeof q.source === 'string' ? q.source : undefined

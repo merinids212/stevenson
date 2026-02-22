@@ -257,25 +257,68 @@
     gap: 2px;
   }
 
-  @media (max-width: 900px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 600px) {
-    .results-grid { grid-template-columns: repeat(3, 1fr); }
-    .page { padding: 0 14px 60px; }
-    .search-input { font-size: 16px; padding: 14px 0; }
-    .filter-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-      padding: 8px 0;
-    }
-    .filter-label { text-align: left; width: auto; font-size: 9px; }
-    .chip { font-size: 12px; padding: 7px 14px; }
-    .filter-chips { gap: 8px; }
-    .color-dot { width: 30px; height: 30px; }
-    .color-palette { gap: 6px; }
-    .color-sep { height: 22px; }
-    .tone-chips { gap: 8px; }
+  /* ─── MOBILE FILTER SELECTS ─── */
+  .filters-mobile {
+    display: none;
+    gap: 6px;
+    padding: 6px 0;
   }
+
+  .filter-select {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--bg);
+    color: #555;
+    border: 1px solid #252525;
+    border-radius: 4px;
+    padding: 8px 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .filter-select:focus { border-color: #555; color: var(--fg); }
+  .filter-select option { background: var(--bg); color: var(--fg); text-transform: none; }
+
+  @media (max-width: 900px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  @media (max-width: 600px) {
+    .page { padding: 0 14px 60px; }
+    .search-input { font-size: 16px; padding: 10px 0; }
+
+    /* Swap chips → selects for subject/medium/mood */
+    .filters-mobile { display: flex; }
+    .filter-row-chips { display: none !important; }
+
+    /* Compact everything */
+    .filters { padding: 6px 0 0; }
+    .filter-row { padding: 3px 0; gap: 8px; }
+    .filter-label { display: none; }
+
+    /* Compact colors — single scrollable row */
+    .color-row-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .color-row-wrap::-webkit-scrollbar { display: none; }
+    .color-palette { flex-wrap: nowrap; gap: 4px; }
+    .color-dot { width: 22px; height: 22px; }
+    .color-sep { display: none; }
+
+    /* Compact tone */
+    .tone-chips { flex-wrap: nowrap; gap: 4px; }
+    .chip { font-size: 10px; padding: 5px 10px; flex-shrink: 0; }
+
+    .divider { margin: 8px 0; }
+    .results-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
   @media (max-width: 400px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
 
   /* ─── RESULT CARD ─── */
@@ -415,6 +458,11 @@
 
   .clip-status.ready { color: var(--green); }
 
+  /* ─── LIKED CHIP ─── */
+  .chip-liked { color: #c0392b !important; border-color: #3a1a1a !important; }
+  .chip-liked:hover { border-color: #c0392b !important; }
+  .chip-liked.active { background: #1a0a0a !important; border-color: #c0392b !important; }
+
   /* ─── DETAIL OVERLAY ─── */
   .detail-overlay {
     position: fixed;
@@ -540,6 +588,49 @@
   <!-- FILTERS -->
   <div class="filters">
     <div class="filter-row">
+      <div class="filter-label">Collection</div>
+      <div class="filter-chips">
+        <button class="chip chip-liked" id="liked-chip" data-type="liked" style="display:none;">liked</button>
+      </div>
+    </div>
+
+    <!-- Mobile: compact selects -->
+    <div class="filters-mobile" id="filters-mobile">
+      <select class="filter-select" data-type="subject">
+        <option value="">Subject</option>
+        <option value="portrait">Portrait</option>
+        <option value="landscape">Landscape</option>
+        <option value="abstract">Abstract</option>
+        <option value="still_life">Still life</option>
+        <option value="figure">Figure</option>
+        <option value="floral">Floral</option>
+        <option value="seascape">Seascape</option>
+        <option value="cityscape">Cityscape</option>
+        <option value="animal">Animal</option>
+        <option value="nude">Nude</option>
+      </select>
+      <select class="filter-select" data-type="mood">
+        <option value="">Mood</option>
+        <option value="serene">Serene</option>
+        <option value="dramatic">Dramatic</option>
+        <option value="melancholy">Melancholy</option>
+        <option value="joyful">Joyful</option>
+        <option value="mysterious">Mysterious</option>
+        <option value="romantic">Romantic</option>
+      </select>
+      <select class="filter-select" data-type="medium">
+        <option value="">Medium</option>
+        <option value="oil">Oil</option>
+        <option value="watercolor">Watercolor</option>
+        <option value="acrylic">Acrylic</option>
+        <option value="pastel">Pastel</option>
+        <option value="ink">Ink</option>
+        <option value="mixed_media">Mixed media</option>
+      </select>
+    </div>
+
+    <!-- Desktop: chip rows -->
+    <div class="filter-row filter-row-chips">
       <div class="filter-label">Subject</div>
       <div class="filter-chips" id="subject-chips">
         <button class="chip" data-type="subject" data-value="portrait">portrait</button>
@@ -555,7 +646,7 @@
       </div>
     </div>
 
-    <div class="filter-row">
+    <div class="filter-row filter-row-chips">
       <div class="filter-label">Medium</div>
       <div class="filter-chips" id="medium-chips">
         <button class="chip" data-type="medium" data-value="oil">oil</button>
@@ -567,7 +658,7 @@
       </div>
     </div>
 
-    <div class="filter-row">
+    <div class="filter-row filter-row-chips">
       <div class="filter-label">Mood</div>
       <div class="filter-chips" id="mood-chips">
         <button class="chip" data-type="mood" data-value="serene">serene</button>
@@ -710,6 +801,65 @@
     return embCache[key];
   }
 
+  // ─── LIKED COLLECTION ───
+  let likedIds = [];
+
+  // Load likes on startup — show chip if any exist
+  fetch('/api/like')
+    .then(r => r.json())
+    .then(data => {
+      likedIds = data.liked || [];
+      const chip = document.getElementById('liked-chip');
+      if (likedIds.length > 0) chip.style.display = '';
+    })
+    .catch(() => {});
+
+  document.getElementById('liked-chip').addEventListener('click', () => {
+    const chip = document.getElementById('liked-chip');
+    const wasActive = chip.classList.contains('active');
+
+    // Clear everything else
+    clearFilters(false);
+    searchQuery = '';
+    searchInput.value = '';
+    searchSubmit.classList.remove('visible');
+
+    if (wasActive) {
+      chip.classList.remove('active');
+      showEmpty();
+      updateClearButton();
+      return;
+    }
+
+    chip.classList.add('active');
+    activeFilters._liked = true;
+    fetchLikedPaintings();
+  });
+
+  function fetchLikedPaintings() {
+    if (!likedIds.length) {
+      paintings = [];
+      renderResults();
+      document.getElementById('results-count').textContent = 'No liked paintings yet';
+      return;
+    }
+
+    startLoading();
+    updateClearButton();
+
+    const idsParam = likedIds.slice(0, 60).join(',');
+    fetch('/api/paintings?ids=' + encodeURIComponent(idsParam))
+      .then(r => r.json())
+      .then(data => {
+        paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+        renderResults();
+        document.getElementById('results-count').textContent =
+          paintings.length + ' liked paintings';
+      })
+      .catch(e => console.error(e))
+      .finally(stopLoading);
+  }
+
   // ─── SEARCH INPUT ───
   const searchInput = document.getElementById('search-input');
   const searchSubmit = document.getElementById('search-submit');
@@ -746,11 +896,45 @@
     }
   });
 
+  // ─── MOBILE SELECT FILTERS ───
+  document.querySelectorAll('.filter-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const type = sel.dataset.type;
+      const value = sel.value;
+
+      // Clear liked state
+      delete activeFilters._liked;
+      document.getElementById('liked-chip').classList.remove('active');
+
+      if (!value) {
+        delete activeFilters[type];
+      } else {
+        activeFilters[type] = value;
+      }
+
+      // Sync desktop chips
+      document.querySelectorAll(`.chip[data-type="${type}"]`).forEach(c => c.classList.remove('active'));
+      if (value) {
+        const chip = document.querySelector(`.chip[data-type="${type}"][data-value="${value}"]`);
+        if (chip) chip.classList.add('active');
+      }
+
+      searchQuery = '';
+      searchInput.value = '';
+      searchSubmit.classList.remove('visible');
+      doFilterSearch();
+    });
+  });
+
   // ─── CHIP CLICKS ───
-  document.querySelectorAll('.chip').forEach(chip => {
+  document.querySelectorAll('.chip:not(.chip-liked)').forEach(chip => {
     chip.addEventListener('click', () => {
       const type = chip.dataset.type;
       const value = chip.dataset.value;
+
+      // Clear liked state when using regular filters
+      delete activeFilters._liked;
+      document.getElementById('liked-chip').classList.remove('active');
 
       if (activeFilters[type] === value) {
         delete activeFilters[type];
@@ -761,6 +945,10 @@
         activeFilters[type] = value;
         chip.classList.add('active');
       }
+
+      // Sync mobile selects
+      const sel = document.querySelector(`.filter-select[data-type="${type}"]`);
+      if (sel) sel.value = activeFilters[type] || '';
 
       searchQuery = '';
       searchInput.value = '';
@@ -773,6 +961,10 @@
   document.querySelectorAll('.color-dot').forEach(dot => {
     dot.addEventListener('click', () => {
       const color = dot.dataset.color;
+
+      // Clear liked state
+      delete activeFilters._liked;
+      document.getElementById('liked-chip').classList.remove('active');
 
       if (activeFilters.color === color) {
         delete activeFilters.color;
@@ -858,7 +1050,7 @@
 
   // ─── FILTER SEARCH ───
   function doFilterSearch() {
-    const keys = Object.keys(activeFilters);
+    const keys = Object.keys(activeFilters).filter(k => k !== '_liked');
     updateClearButton();
 
     if (keys.length === 0) {
@@ -1033,6 +1225,7 @@
     activeFilters = {};
     document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.color-dot.active').forEach(d => d.classList.remove('active'));
+    document.querySelectorAll('.filter-select').forEach(sel => sel.value = '');
     if (!keepSearch) {
       searchQuery = '';
       searchInput.value = '';

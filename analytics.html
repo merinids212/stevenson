@@ -711,7 +711,7 @@
           <th data-sort="price" style="width:72px">Price</th>
           <th data-sort="state" style="width:60px">State</th>
           <th style="width:180px">Tags</th>
-          <th data-sort="art_score" class="sorted" style="width:52px">Score</th>
+          <th data-sort="composite" class="sorted" style="width:52px">Score</th>
           <th data-sort="value_score" style="width:52px">Value</th>
         </tr>
       </thead>
@@ -768,6 +768,38 @@ function buildTags(p){
 }
 function deals(items){const g={};for(const i of items){const k=i.tags.mediums[0]||'x';if(!g[k])g[k]=[];if(i.price)g[k].push(i.price);}const m={};for(const[k,p]of Object.entries(g)){const s=p.sort((a,b)=>a-b);m[k]=s[Math.floor(s.length/2)]||100;}for(const i of items){if(!i.price){i.ds=0;continue;}const k=i.tags.mediums[0]||'x',r=(m[k]-i.price)/m[k];let b=0;if(i.tags.flags.includes('signed'))b+=.15;if(i.tags.flags.includes('original'))b+=.15;if(i.tags.flags.includes('framed'))b+=.1;i.ds=Math.round(Math.min(100,Math.max(0,(r+b)*100)));}}
 
+// ─── COMPOSITE SCORING ───
+// Percentile-rank blend across independent scoring signals.
+// TOPIQ dropped (45% at 100.0, no discrimination).
+// MUSIQ is the useful second opinion (0.216 correlation with art_score).
+function pctRank(items,key){
+  const valid=items.filter(p=>p[key]!=null).slice().sort((a,b)=>a[key]-b[key]);
+  const n=Math.max(valid.length-1,1);
+  const map=new Map();
+  valid.forEach((p,i)=>map.set(p,i/n*100));
+  return map;
+}
+function computeComposite(){
+  const artR=pctRank(all,'art_score');
+  const qualR=pctRank(all,'quality_score');
+  const uniqR=pctRank(all,'uniqueness');
+  const enriched=all.filter(p=>p.musiq_score!=null);
+  const musiqR=pctRank(enriched,'musiq_score');
+  for(const p of all){
+    const ar=artR.get(p)??50;
+    const qr=qualR.get(p)??50;
+    const ur=uniqR.get(p)??50;
+    const mr=musiqR.get(p);
+    // Enriched: art 0.35, musiq 0.30, quality 0.20, uniqueness 0.15
+    // Unenriched: redistribute musiq weight to art and quality
+    if(mr!=null){
+      p._composite=ar*0.35+mr*0.30+qr*0.20+ur*0.15;
+    } else {
+      p._composite=ar*0.50+qr*0.30+ur*0.20;
+    }
+  }
+}
+
 function rgbHue(rgb){
   let[r,g,b]=rgb;r/=255;g/=255;b/=255;
   const max=Math.max(r,g,b),min=Math.min(r,g,b);
@@ -784,7 +816,7 @@ Chart.defaults.font.size=8;
 Chart.defaults.color='#666';
 Chart.defaults.plugins.legend.display=false;
 
-let all=[],exp=[],pg=0,sort={key:'art_score',dir:-1},heroStats=null;
+let all=[],exp=[],pg=0,sort={key:'composite',dir:-1},heroStats=null;
 const PS=40;
 
 // Phase 1: Hero stats (fast, small payload)
@@ -806,7 +838,7 @@ function renderHero(s,paintings){
     {n:stateSet?stateSet.size:s.regions,l:stateSet?'States':'Regions',s:sourceCount?sourceCount+' sources':'\u2014'},
     {n:'$'+parseFloat(s.price_median).toLocaleString(),l:'Med. Price',s:'$'+parseFloat(s.price_min)+'\u2013$'+parseFloat(s.price_max).toLocaleString()},
     {n:parseFloat(s.median_art_score).toFixed(1),l:'Art Score',s:s.scored_count+' scored'},
-    {n:s.top_rated_count,l:'Top Rated',s:'Score 55+'},
+    {n:paintings?paintings.filter(p=>p._composite>=80).length:s.top_rated_count,l:'Top Rated',s:paintings?'Composite 80+':'Score 55+'},
     {n:s.gems_count,l:'Gems',s:'Value 8+'},
   ].map(s=>`<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
 }
@@ -815,8 +847,9 @@ function renderHero(s,paintings){
 fetch('/api/paintings').then(r=>r.json()).then(d=>{
   all=d.paintings.filter(p=>p.images&&p.images.length>0).map(p=>({...p,tags:buildTags(p),_enriched:p.aesthetic2!=null}));
   deals(all);
+  computeComposite();
   if(heroStats)renderHero(heroStats,all);
-  document.getElementById('live-ct').textContent=all.length.toLocaleString()+' listings';
+  document.getElementById('live-ct').textContent=(heroStats?parseInt(heroStats.total_listings):all.length).toLocaleString()+' listings';
   charts();filter('all');
 });
 
@@ -985,7 +1018,7 @@ function filter(f){
   pg=0;
   document.querySelectorAll('#fbar button').forEach(b=>b.classList.toggle('active',b.dataset.ef===f));
   switch(f){
-    case 'top-rated':exp=all.filter(p=>p.art_score>=50).sort((a,b)=>(b.art_score||0)-(a.art_score||0));break;
+    case 'top-rated':exp=all.filter(p=>p._composite>=80).sort((a,b)=>(b._composite||0)-(a._composite||0));break;
     case 'gems':exp=all.filter(p=>p.value_score!=null).sort((a,b)=>(b.value_score||0)-(a.value_score||0));break;
     case 'deals':exp=all.filter(p=>p.ds>=50).sort((a,b)=>b.ds-a.ds);break;
     case 'by-artist':exp=all.filter(p=>p.artist);break;
@@ -1019,7 +1052,7 @@ document.querySelectorAll('.dtbl th[data-sort]').forEach(th=>{
 
 function doSort(){
   const{key,dir}=sort;
-  exp.sort((a,b)=>{let va,vb;switch(key){case'price':va=a.price||0;vb=b.price||0;break;case'art_score':va=a.art_score||0;vb=b.art_score||0;break;case'value_score':va=a.value_score||0;vb=b.value_score||0;break;case'state':va=a.state||'';vb=b.state||'';break;default:va=a.title.toLowerCase();vb=b.title.toLowerCase();}return va<vb?-dir:va>vb?dir:0;});
+  exp.sort((a,b)=>{let va,vb;switch(key){case'price':va=a.price||0;vb=b.price||0;break;case'composite':va=a._composite||0;vb=b._composite||0;break;case'art_score':va=a.art_score||0;vb=b.art_score||0;break;case'value_score':va=a.value_score||0;vb=b.value_score||0;break;case'state':va=a.state||'';vb=b.state||'';break;default:va=a.title.toLowerCase();vb=b.title.toLowerCase();}return va<vb?-dir:va>vb?dir:0;});
   tbl();
 }
 
@@ -1045,9 +1078,9 @@ function tbl(){
       ...(i.artist?[`<span class="tag artist">${i.artist}</span>`]:[]),
       ...i.tags.flags.map(t=>`<span class="tag">${t}</span>`),
     ].join('');
-    const v=i.art_score||0;
+    const v=i._composite||0;
     const vs=i.value_score;
-    return `<tr onclick="openCard(${absIdx},this.querySelector('.thumb'))" style="cursor:pointer"><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc">${i.title}</td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${stateLabel(i)}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs*10):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
+    return `<tr onclick="openCard(${absIdx},this.querySelector('.thumb'))" style="cursor:pointer"><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc">${i.title}</td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${stateLabel(i)}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
   }).join('');
   pagi();
 }
@@ -1234,19 +1267,17 @@ function populateCard(painting){
 
   // Scores
   const scores=[];
+  if(painting._composite!=null) scores.push({l:'Composite',v:painting._composite,max:100});
   if(painting.art_score!=null) scores.push({l:'Art',v:painting.art_score,max:100});
-  if(painting.value_score!=null) scores.push({l:'Value',v:painting.value_score,max:10});
+  if(painting.musiq_score!=null) scores.push({l:'MUSIQ',v:painting.musiq_score,max:100});
   if(painting.quality_score!=null) scores.push({l:'Quality',v:painting.quality_score,max:100});
   if(painting.uniqueness!=null) scores.push({l:'Unique',v:painting.uniqueness,max:100});
-  if(painting.aesthetic_score!=null) scores.push({l:'Aesthetic',v:painting.aesthetic_score,max:10});
+  if(painting.value_score!=null) scores.push({l:'Value',v:painting.value_score,max:100});
   if(painting.aesthetic2!=null) scores.push({l:'Aesth2',v:painting.aesthetic2,max:100});
-  if(painting.topiq_score!=null) scores.push({l:'TOPIQ',v:painting.topiq_score,max:100});
-  if(painting.musiq_score!=null) scores.push({l:'MUSIQ',v:painting.musiq_score,max:100});
 
   document.getElementById('card-scores').innerHTML=scores.map(s=>{
     const pct=Math.min(100,(s.v/s.max)*100).toFixed(1);
-    const normFor100=s.max===10?s.v*10:s.v;
-    const col=scoreColor(normFor100);
+    const col=scoreColor(s.v);
     return `<div class="acard-bar"><span class="sl">${s.l}</span><div class="st"><div class="sf" style="width:${pct}%;background:${col}"></div></div><span class="sv" style="color:${col}">${s.v.toFixed(1)}</span></div>`;
   }).join('');
 
