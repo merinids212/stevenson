@@ -27,14 +27,18 @@ Stevenson is an art discovery platform that scrapes painting listings from Craig
 
 **Data stores**: `data/craigslist.json`, `data/ebay.json` (gitignored, local-only)
 
-**Redis** (Upstash/Redis Cloud):
-- `stv:p:{id}` — Painting hash (all fields as strings)
+**Redis** (Redis Cloud, 1 GB plan, single instance — `REDIS_URL`):
+- **One Redis for everything** — local dev, CLI tools, and Vercel prod all use the same `REDIS_URL` (redis-13446). There is no separate dev Redis. Never create or reference a second Redis instance.
+- When reporting stats, always report from this Redis. It is the source of truth for what's live on the site.
+- Redis may have more paintings than local stores (from previous runs / other machines). That's normal — Redis is additive.
+- `stv:p:{id}` — Painting hash (all fields as strings, plus binary `embedding` field)
 - `stv:idx:art_score` — Sorted set for score-based queries
 - `stv:idx:price` — Sorted set for price-based queries
 - `stv:idx:value_score` — Sorted set for gem discovery
 - `stv:idx:region:{name}`, `stv:idx:state:{code}`, `stv:idx:source:{cl|eb}` — Filtered indexes
 - `stv:dedup` — Set of all painting IDs
 - `stv:stats` — Hash of aggregate stats
+- `stv:vec_idx` — RediSearch HNSW vector index on `embedding` field (768-dim CLIP float32)
 
 ## CLI Usage
 
@@ -49,6 +53,9 @@ stevenson push                  # Push paintings.json to Redis
 stevenson push --flush          # Flush + push
 stevenson export                # Merge stores → paintings.json
 stevenson update                # Full pipeline: pull → export → score → push
+stevenson update --stream       # Streaming: score & push as paintings arrive
+stevenson enrich                # Enrich scored paintings (pyiqa, tags, colors)
+stevenson enrich --force        # Re-enrich everything
 stevenson status                # Show store + Redis stats
 stevenson ingest file.json --source craigslist  # Import existing data
 ```
@@ -82,6 +89,6 @@ python push.py                # Push paintings.json to Redis
 
 ## Environment
 
-- `REDIS_URL` — Redis connection string (also checks `stevenson_REDIS_URL`, `.env.local`)
+- `REDIS_URL` — Redis connection string (set in `.env.local` for local dev, Vercel dashboard for prod)
 - Python deps: `torch`, `open_clip_torch`, `pillow`, `numpy`, `requests`, `redis`
 - Node deps: `ioredis`, `@vercel/node` (TypeScript)

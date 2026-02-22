@@ -306,6 +306,8 @@
   .tag.style { border-color: #333; color: var(--fg); }
   .tag.medium { border-color: #1e2e1e; color: #5a8a5a; }
   .tag.artist { border-color: #2e2e1e; color: #b8a060; }
+  .tag.mood { border-color: #2e1e2e; color: #a060a0; }
+  .tag.subject { border-color: #1e2e2e; color: #5a8aaa; }
 
   .sc {
     font-variant-numeric: tabular-nums;
@@ -372,6 +374,14 @@
     color: #222;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+
+  /* ─── COLOR SPECTRUM ─── */
+  .color-spectrum {
+    height: 40px;
+    display: flex;
+    border: 1px solid #1a1a1a;
+    overflow: hidden;
   }
 
   /* ─── DETAIL VIEW ─── */
@@ -561,6 +571,13 @@
     margin-top: 4px;
   }
 
+  .acard-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
   .acard-link {
     display: inline-block;
     margin-top: 24px;
@@ -627,21 +644,21 @@
 
 <div class="hero" id="hero"></div>
 
-<!-- CLIP -->
-<div class="sec-head">CLIP Model + LAION Aesthetic</div>
+<!-- Scoring Models -->
+<div class="sec-head">Scoring Models</div>
 <div class="cgrid">
   <div class="ccell">
     <h3>Art Score Distribution</h3>
     <div class="cwrap"><canvas id="c-art"></canvas></div>
   </div>
   <div class="ccell">
-    <h3>Quality vs Uniqueness</h3>
+    <h3 id="c-qu-title">Quality vs Uniqueness</h3>
     <div class="cwrap"><canvas id="c-qu"></canvas></div>
   </div>
 </div>
 <div class="strips" id="clip-strips"></div>
 
-<!-- MARKET -->
+<!-- Market -->
 <div class="sec-head">Market</div>
 <div class="cgrid">
   <div class="ccell">
@@ -649,13 +666,21 @@
     <div class="cwrap"><canvas id="c-price"></canvas></div>
   </div>
   <div class="ccell">
-    <h3>Art Score by Region</h3>
+    <h3>Art Score by State</h3>
     <div class="cwrap"><canvas id="c-sreg"></canvas></div>
   </div>
 </div>
 <div class="strips" id="mkt-strips"></div>
 
-<!-- EXPLORER -->
+<!-- Collection -->
+<div class="sec-head">Collection</div>
+<div style="padding:16px;border-bottom:1px solid var(--mute)">
+  <h3 style="font-size:8px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:10px">Color Fingerprint <span id="spectrum-count" style="color:#333"></span></h3>
+  <div class="color-spectrum" id="color-spectrum"></div>
+</div>
+<div class="strips" id="extra-strips"></div>
+
+<!-- Hunter -->
 <div class="explorer-wrap">
   <div class="sec-head">Hunter</div>
   <div class="fbar" id="fbar">
@@ -669,7 +694,11 @@
     <button data-ef="watercolor">Watercolor</button>
     <button data-ef="landscape">Landscape</button>
     <button data-ef="portrait">Portrait</button>
-    <button data-ef="abstract-clip">Abstract</button>
+    <button data-ef="abstract">Abstract</button>
+    <button data-ef="still-life">Still Life</button>
+    <button data-ef="seascape">Seascape</button>
+    <button data-ef="serene">Serene</button>
+    <button data-ef="dramatic">Dramatic</button>
     <button data-ef="signed">Signed</button>
   </div>
   <div class="explorer-count" id="exp-count"></div>
@@ -680,7 +709,7 @@
           <th style="width:50px"></th>
           <th data-sort="title">Title</th>
           <th data-sort="price" style="width:72px">Price</th>
-          <th data-sort="region" style="width:60px">Region</th>
+          <th data-sort="state" style="width:60px">State</th>
           <th style="width:180px">Tags</th>
           <th data-sort="art_score" class="sorted" style="width:52px">Score</th>
           <th data-sort="value_score" style="width:52px">Value</th>
@@ -708,7 +737,9 @@
     <div class="acard-scores" id="card-scores"></div>
     <div class="acard-section-head">Tags</div>
     <div class="acard-tags" id="card-tags"></div>
-    <a class="acard-link" id="card-link" href="#" target="_blank" rel="noopener">View on Craigslist &#8599;</a>
+    <div class="acard-section-head" id="card-colors-head" style="display:none">Colors</div>
+    <div class="acard-colors" id="card-colors"></div>
+    <a class="acard-link" id="card-link" href="#" target="_blank" rel="noopener">View Listing &#8599;</a>
     <div class="acard-nav">
       <button id="card-prev">&#8249; Prev</button>
       <span class="acard-pos" id="card-pos"></span>
@@ -717,40 +748,74 @@
   </div>
 </div>
 
-<div class="foot">Stevenson / California Paintings / CLIP ViT-L/14 + LAION Aesthetic</div>
+<div class="foot">Stevenson / CLIP ViT-L/14 + LAION + TOPIQ + MUSIQ</div>
 
 <script>
-const RL={losangeles:'LA',sfbay:'SF',sandiego:'SD',sacramento:'Sac',fresno:'Fres',bakersfield:'Bako',orangecounty:'OC',inlandempire:'IE',ventura:'Vent',santabarbara:'SB',stockton:'Stock',modesto:'Mod',visalia:'Vis',merced:'Merc',monterey:'Mont',chico:'Chico',redding:'Red',humboldt:'Hum',mendocino:'Mendo',goldcountry:'Gold',susanville:'Susan',yubasutter:'Yuba',palmsprings:'PS',imperial:'Imp',slo:'SLO',hanford:'Han',siskiyou:'Sisk'};
 const MEDIUMS={oil:/\boil\b/i,acrylic:/\bacrylic\b/i,watercolor:/\bwater\s?colou?r\b/i,pastel:/\bpastel\b/i,gouache:/\bgouache\b/i,spray:/\bspray\b/i,ink:/\bink\b/i,mixed:/\bmixed\s?media\b/i,print:/\bprint\b|\blithograph\b|\bserigraph\b|\bgiclee\b/i};
 const FLAGS={signed:/\bsigned\b|\bsignature\b/i,framed:/\bframed\b|\bframe\b/i,large:/\blarge\b|\bhuge\b|\boversized\b|\b\d{2,3}\s*x\s*\d{2,3}\b/i,original:/\boriginal\b/i};
+const TAG_COLORS={red:'#c44',blue:'#46c',green:'#4a6',yellow:'#ca4',orange:'#c84',purple:'#84c',pink:'#c4a',teal:'#4aa',warm:'#c96',cool:'#69c',dark:'#444',light:'#ccc',muted:'#888',vivid:'#c4c'};
 
+function stateLabel(p){return (p.state||'??').toUpperCase();}
 function classify(t){const r={mediums:[],flags:[]};for(const[k,x]of Object.entries(MEDIUMS))if(x.test(t))r.mediums.push(k);for(const[k,x]of Object.entries(FLAGS))if(x.test(t))r.flags.push(k);return r;}
+function buildTags(p){
+  const nlp=classify(p.title);
+  return {
+    mediums:p.medium_tags&&p.medium_tags.length?p.medium_tags.map(m=>m.tag):nlp.mediums,
+    subjects:p.subjects&&p.subjects.length?p.subjects.map(s=>s.tag):p.clip_styles&&p.clip_styles.length?[p.clip_styles[0].style]:[],
+    moods:p.moods&&p.moods.length?p.moods.map(m=>m.tag):[],
+    flags:nlp.flags,
+  };
+}
 function deals(items){const g={};for(const i of items){const k=i.tags.mediums[0]||'x';if(!g[k])g[k]=[];if(i.price)g[k].push(i.price);}const m={};for(const[k,p]of Object.entries(g)){const s=p.sort((a,b)=>a-b);m[k]=s[Math.floor(s.length/2)]||100;}for(const i of items){if(!i.price){i.ds=0;continue;}const k=i.tags.mediums[0]||'x',r=(m[k]-i.price)/m[k];let b=0;if(i.tags.flags.includes('signed'))b+=.15;if(i.tags.flags.includes('original'))b+=.15;if(i.tags.flags.includes('framed'))b+=.1;i.ds=Math.round(Math.min(100,Math.max(0,(r+b)*100)));}}
+
+function rgbHue(rgb){
+  let[r,g,b]=rgb;r/=255;g/=255;b/=255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b);
+  if(max===min)return 0;
+  const d=max-min;let h;
+  if(max===r)h=((g-b)/d)%6;
+  else if(max===g)h=(b-r)/d+2;
+  else h=(r-g)/d+4;
+  h*=60;if(h<0)h+=360;return h;
+}
 
 Chart.defaults.font.family="'IBM Plex Mono',monospace";
 Chart.defaults.font.size=8;
 Chart.defaults.color='#666';
 Chart.defaults.plugins.legend.display=false;
 
-let all=[],exp=[],pg=0,sort={key:'art_score',dir:-1};
+let all=[],exp=[],pg=0,sort={key:'art_score',dir:-1},heroStats=null;
 const PS=40;
 
 // Phase 1: Hero stats (fast, small payload)
 fetch('/api/stats').then(r=>r.json()).then(s=>{
+  heroStats=s;
+  renderHero(s,null);
+});
+
+function renderHero(s,paintings){
+  const enriched=paintings?paintings.filter(p=>p._enriched).length:0;
+  const enrichPct=paintings&&paintings.length?Math.round(enriched/paintings.length*100):null;
+  const stateSet=paintings?new Set(paintings.map(p=>p.state).filter(Boolean)):null;
+  const hasCL=paintings?paintings.some(p=>p.url&&!p.url.includes('ebay')):false;
+  const hasEB=paintings?paintings.some(p=>p.url&&p.url.includes('ebay')):false;
+  const sourceCount=paintings?(hasCL?1:0)+(hasEB?1:0):null;
+
   document.getElementById('hero').innerHTML=[
-    {n:parseInt(s.total_listings).toLocaleString(),l:'Listings',s:'California'},
-    {n:s.regions,l:'Regions',s:'CL markets'},
-    {n:'$'+parseFloat(s.price_median).toLocaleString(),l:'Med. Price',s:'$'+parseFloat(s.price_min)+'–$'+parseFloat(s.price_max).toLocaleString()},
-    {n:parseFloat(s.median_art_score).toFixed(1),l:'Art Score',s:s.scored_count+' CLIP+LAION scored'},
+    {n:parseInt(s.total_listings).toLocaleString(),l:'Listings',s:enrichPct!=null?enrichPct+'% enriched':'\u2014'},
+    {n:stateSet?stateSet.size:s.regions,l:stateSet?'States':'Regions',s:sourceCount?sourceCount+' sources':'\u2014'},
+    {n:'$'+parseFloat(s.price_median).toLocaleString(),l:'Med. Price',s:'$'+parseFloat(s.price_min)+'\u2013$'+parseFloat(s.price_max).toLocaleString()},
+    {n:parseFloat(s.median_art_score).toFixed(1),l:'Art Score',s:s.scored_count+' scored'},
     {n:s.top_rated_count,l:'Top Rated',s:'Score 55+'},
     {n:s.gems_count,l:'Gems',s:'Value 8+'},
   ].map(s=>`<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
-});
+}
 
 // Phase 2: Full data for charts + explorer
 fetch('/api/paintings').then(r=>r.json()).then(d=>{
-  all=d.paintings.filter(p=>p.images&&p.images.length>0).map(p=>({...p,tags:classify(p.title)}));
+  all=d.paintings.filter(p=>p.images&&p.images.length>0).map(p=>({...p,tags:buildTags(p),_enriched:p.aesthetic2!=null}));
   deals(all);
+  if(heroStats)renderHero(heroStats,all);
   document.getElementById('live-ct').textContent=all.length.toLocaleString()+' listings';
   charts();filter('all');
 });
@@ -759,7 +824,7 @@ function charts(){
   // Art score distribution
   const sc=all.filter(p=>p.art_score!=null);
   const bins=[0,20,30,40,50,60,70,80,100];
-  const labels=['<20','20–30','30–40','40–50','50–60','60–70','70–80','80+'];
+  const labels=['<20','20\u201330','30\u201340','40\u201350','50\u201360','60\u201370','70\u201380','80+'];
   const cn=new Array(labels.length).fill(0);
   sc.forEach(p=>{const s=p.art_score;for(let i=0;i<bins.length-1;i++){if(s>=bins[i]&&s<bins[i+1]){cn[i]++;break;}}});
   const barColors=['#221111','#332222','#443322','#665533','#886644','#aa8855','#ccbb66','#30d158'];
@@ -769,17 +834,42 @@ function charts(){
     options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},border:{color:'#1e1e1e'}},y:{grid:{color:'#151515'},border:{color:'#1e1e1e'}}}},
   });
 
-  // Q vs U scatter
-  const sf=all.filter(p=>p.quality_score!=null&&p.uniqueness!=null);
-  const sMin=Math.min(...sf.map(p=>p.art_score||0)),sMax=Math.max(...sf.map(p=>p.art_score||0));
-  const sd=sf.map(p=>({x:p.quality_score,y:p.uniqueness}));
-  const sColors=sf.map(p=>{const t=((p.art_score||0)-sMin)/(sMax-sMin||1);return `hsla(${Math.round(t*120)},70%,50%,0.25)`;});
-  const sBorders=sf.map(p=>{const t=((p.art_score||0)-sMin)/(sMax-sMin||1);return `hsla(${Math.round(t*120)},70%,50%,0.5)`;});
-  new Chart(document.getElementById('c-qu'),{
-    type:'scatter',
-    data:{datasets:[{data:sd,backgroundColor:sColors,borderColor:sBorders,pointRadius:2.5,pointHoverRadius:5,pointHoverBackgroundColor:'#fff'}]},
-    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'QUALITY',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}},y:{title:{display:true,text:'UNIQUENESS',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}}}},
-  });
+  // Art Score vs Aesthetic2 (or Q vs U fallback)
+  const a2=all.filter(p=>p.art_score!=null&&p.aesthetic2!=null);
+  if(a2.length>=100){
+    document.getElementById('c-qu-title').textContent='Art Score vs Aesthetic2';
+    const sd=a2.map(p=>({x:p.art_score,y:p.aesthetic2}));
+    const sColors=a2.map(p=>{
+      const diff=Math.abs(p.art_score-p.aesthetic2);
+      if(diff<10)return 'rgba(48,209,88,0.25)';
+      if(diff<25)return 'rgba(255,159,10,0.25)';
+      return 'rgba(255,55,95,0.25)';
+    });
+    const sBorders=a2.map(p=>{
+      const diff=Math.abs(p.art_score-p.aesthetic2);
+      if(diff<10)return 'rgba(48,209,88,0.5)';
+      if(diff<25)return 'rgba(255,159,10,0.5)';
+      return 'rgba(255,55,95,0.5)';
+    });
+    new Chart(document.getElementById('c-qu'),{
+      type:'scatter',
+      data:{datasets:[{data:sd,backgroundColor:sColors,borderColor:sBorders,pointRadius:2.5,pointHoverRadius:5,pointHoverBackgroundColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'ART SCORE',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}},y:{title:{display:true,text:'AESTHETIC2',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}}}},
+    });
+  } else {
+    // Fallback: Q vs U scatter
+    document.getElementById('c-qu-title').textContent='Quality vs Uniqueness';
+    const sf=all.filter(p=>p.quality_score!=null&&p.uniqueness!=null);
+    const sMin=Math.min(...sf.map(p=>p.art_score||0)),sMax=Math.max(...sf.map(p=>p.art_score||0));
+    const sd=sf.map(p=>({x:p.quality_score,y:p.uniqueness}));
+    const sColors=sf.map(p=>{const t=((p.art_score||0)-sMin)/(sMax-sMin||1);return `hsla(${Math.round(t*120)},70%,50%,0.25)`;});
+    const sBorders=sf.map(p=>{const t=((p.art_score||0)-sMin)/(sMax-sMin||1);return `hsla(${Math.round(t*120)},70%,50%,0.5)`;});
+    new Chart(document.getElementById('c-qu'),{
+      type:'scatter',
+      data:{datasets:[{data:sd,backgroundColor:sColors,borderColor:sBorders,pointRadius:2.5,pointHoverRadius:5,pointHoverBackgroundColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'QUALITY',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}},y:{title:{display:true,text:'UNIQUENESS',font:{size:7,weight:'600'},color:'#777'},grid:{color:'#151515'},border:{color:'#1e1e1e'}}}},
+    });
+  }
 
   // Price distribution
   const bk=[0,25,50,100,200,500,1000,5000,Infinity],lb=['<25','25','50','100','200','500','1K','5K+'],pc=new Array(8).fill(0);
@@ -790,10 +880,10 @@ function charts(){
     options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},border:{color:'#1e1e1e'}},y:{grid:{color:'#151515'},border:{color:'#1e1e1e'}}}},
   });
 
-  // Score by region
+  // Art Score by State
   const rg={};
-  all.forEach(p=>{if(p.art_score==null)return;if(!rg[p.region])rg[p.region]=[];rg[p.region].push(p.art_score);});
-  const re=Object.entries(rg).filter(([,s])=>s.length>=5).map(([r,s])=>[RL[r]||r,s.reduce((a,b)=>a+b,0)/s.length]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  all.forEach(p=>{if(p.art_score==null)return;const st=stateLabel(p);if(!rg[st])rg[st]=[];rg[st].push(p.art_score);});
+  const re=Object.entries(rg).filter(([,s])=>s.length>=5).map(([r,s])=>[r,s.reduce((a,b)=>a+b,0)/s.length]).sort((a,b)=>b[1]-a[1]).slice(0,12);
   const avgMin=re.length?Math.min(...re.map(([,s])=>s)):0;
   const avgMax=re.length?Math.max(...re.map(([,s])=>s)):1;
   const regColors=re.map(([,s])=>{const t=(s-avgMin)/(avgMax-avgMin||1);return `hsl(${30+t*20},${50+t*30}%,${35+t*25}%)`;});
@@ -804,10 +894,11 @@ function charts(){
   });
 
   renderStrips();
+  renderSpectrum();
 }
 
 function mkStrip(items,max,hue){
-  return items.map(([n,c],i)=>{
+  return items.map(([n,c])=>{
     const pct=(c/max*100).toFixed(1);
     const light=35+((c/max)*20);
     const col=`hsl(${hue},50%,${light}%)`;
@@ -815,32 +906,78 @@ function mkStrip(items,max,hue){
   }).join('');
 }
 
-function renderStrips(){
-  // CLIP styles + artists
-  const stc={};
-  all.forEach(p=>{if(!p.clip_styles||!p.clip_styles.length)return;stc[p.clip_styles[0].style]=(stc[p.clip_styles[0].style]||0)+1;});
-  const sts=Object.entries(stc).sort((a,b)=>b[1]-a[1]);
+function mkColorStrip(items,max){
+  return items.map(([n,c])=>{
+    const pct=(c/max*100).toFixed(1);
+    const col=TAG_COLORS[n]||'#555';
+    return `<div class="sbar"><span class="sl">${n}</span><div class="st"><div class="sf" style="width:${pct}%;background:${col}"></div></div><span class="sv">${c}</span></div>`;
+  }).join('');
+}
 
-  const artc={};
-  all.forEach(p=>{if(p.artist)artc[p.artist]=(artc[p.artist]||0)+1;});
-  const arts=Object.entries(artc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+function renderStrips(){
+  // Row 1: Subjects + Moods
+  const subc={};
+  all.forEach(p=>{p.tags.subjects.forEach(s=>{subc[s]=(subc[s]||0)+1;});});
+  const subs=Object.entries(subc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  const modc={};
+  all.forEach(p=>{p.tags.moods.forEach(m=>{modc[m]=(modc[m]||0)+1;});});
+  const mods=Object.entries(modc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const enrichedCount=all.filter(p=>p._enriched).length;
 
   document.getElementById('clip-strips').innerHTML=
-    `<div class="strip-col"><h4>CLIP Styles</h4>${mkStrip(sts,sts[0]?.[1]||1,270)}</div>`+
-    `<div class="strip-col"><h4>Artists Found</h4>${arts.length?mkStrip(arts,arts[0]?.[1]||1,45):'<span style="color:#333;font-size:9px">No artists parsed yet</span>'}</div>`;
+    `<div class="strip-col"><h4>Subjects</h4>${subs.length?mkStrip(subs,subs[0][1],200):'<span style="color:#333;font-size:9px">No subject data yet</span>'}</div>`+
+    `<div class="strip-col"><h4>Moods <span style="font-weight:400;color:#333">(${enrichedCount} enriched)</span></h4>${mods.length?mkStrip(mods,mods[0][1],330):'<span style="color:#333;font-size:9px">Enrichment in progress</span>'}</div>`;
 
-  // Regions + mediums
-  const rgc={};
-  all.forEach(p=>{rgc[p.region]=(rgc[p.region]||0)+1;});
-  const rgs=Object.entries(rgc).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([r,c])=>[RL[r]||r,c]);
+  // Row 2: States + Mediums
+  const stc={};
+  all.forEach(p=>{const st=stateLabel(p);stc[st]=(stc[st]||0)+1;});
+  const sts=Object.entries(stc).sort((a,b)=>b[1]-a[1]).slice(0,12);
 
   const mdc={};
   all.forEach(p=>{p.tags.mediums.forEach(m=>{mdc[m]=(mdc[m]||0)+1;});});
   const mds=Object.entries(mdc).sort((a,b)=>b[1]-a[1]);
 
   document.getElementById('mkt-strips').innerHTML=
-    `<div class="strip-col"><h4>Regions</h4>${mkStrip(rgs,rgs[0]?.[1]||1,200)}</div>`+
-    `<div class="strip-col"><h4>Mediums (NLP)</h4>${mkStrip(mds,mds[0]?.[1]||1,140)}</div>`;
+    `<div class="strip-col"><h4>States</h4>${mkStrip(sts,sts[0]?.[1]||1,200)}</div>`+
+    `<div class="strip-col"><h4>Mediums</h4>${mkStrip(mds,mds[0]?.[1]||1,140)}</div>`;
+
+  // Row 3: Artists + Color Tags
+  const artc={};
+  all.forEach(p=>{if(p.artist)artc[p.artist]=(artc[p.artist]||0)+1;});
+  const arts=Object.entries(artc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  const ctc={};
+  all.forEach(p=>{if(p.color_tags)p.color_tags.forEach(t=>{ctc[t]=(ctc[t]||0)+1;});});
+  const cts=Object.entries(ctc).sort((a,b)=>b[1]-a[1]);
+
+  document.getElementById('extra-strips').innerHTML=
+    `<div class="strip-col"><h4>Artists</h4>${arts.length?mkStrip(arts,arts[0][1],45):'<span style="color:#333;font-size:9px">No artists parsed yet</span>'}</div>`+
+    `<div class="strip-col"><h4>Color Palette</h4>${cts.length?mkColorStrip(cts,cts[0][1]):'<span style="color:#333;font-size:9px">Enrichment in progress</span>'}</div>`;
+}
+
+function renderSpectrum(){
+  const hueColors=all.filter(p=>p.colors&&p.colors.length)
+    .map(p=>({hex:p.colors[0].hex,rgb:p.colors[0].rgb}));
+
+  const el=document.getElementById('color-spectrum');
+  const countEl=document.getElementById('spectrum-count');
+
+  if(!hueColors.length){
+    el.innerHTML='<span style="color:#333;font-size:9px;display:flex;align-items:center;justify-content:center;width:100%">Enrichment in progress</span>';
+    countEl.textContent='';
+    return;
+  }
+
+  hueColors.sort((a,b)=>rgbHue(a.rgb)-rgbHue(b.rgb));
+  countEl.textContent='('+hueColors.length+' paintings)';
+
+  el.innerHTML='';
+  hueColors.forEach(c=>{
+    const s=document.createElement('div');
+    s.style.cssText='flex:1;background:'+c.hex;
+    el.appendChild(s);
+  });
 }
 
 // ─── EXPLORER ───
@@ -855,9 +992,13 @@ function filter(f){
     case 'oil':exp=all.filter(p=>p.tags.mediums.includes('oil'));break;
     case 'acrylic':exp=all.filter(p=>p.tags.mediums.includes('acrylic'));break;
     case 'watercolor':exp=all.filter(p=>p.tags.mediums.includes('watercolor'));break;
-    case 'landscape':exp=all.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='landscape');break;
-    case 'portrait':exp=all.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='portrait');break;
-    case 'abstract-clip':exp=all.filter(p=>p.clip_styles&&p.clip_styles[0]&&p.clip_styles[0].style==='abstract');break;
+    case 'landscape':exp=all.filter(p=>p.tags.subjects.includes('landscape'));break;
+    case 'portrait':exp=all.filter(p=>p.tags.subjects.includes('portrait'));break;
+    case 'abstract':exp=all.filter(p=>p.tags.subjects.includes('abstract'));break;
+    case 'still-life':exp=all.filter(p=>p.tags.subjects.some(s=>s==='still life'||s==='still_life'));break;
+    case 'seascape':exp=all.filter(p=>p.tags.subjects.includes('seascape'));break;
+    case 'serene':exp=all.filter(p=>p.tags.moods.includes('serene'));break;
+    case 'dramatic':exp=all.filter(p=>p.tags.moods.includes('dramatic'));break;
     case 'signed':exp=all.filter(p=>p.tags.flags.includes('signed'));break;
     default:exp=[...all];
   }
@@ -878,13 +1019,12 @@ document.querySelectorAll('.dtbl th[data-sort]').forEach(th=>{
 
 function doSort(){
   const{key,dir}=sort;
-  exp.sort((a,b)=>{let va,vb;switch(key){case'price':va=a.price||0;vb=b.price||0;break;case'art_score':va=a.art_score||0;vb=b.art_score||0;break;case'value_score':va=a.value_score||0;vb=b.value_score||0;break;case'region':va=a.region;vb=b.region;break;default:va=a.title.toLowerCase();vb=b.title.toLowerCase();}return va<vb?-dir:va>vb?dir:0;});
+  exp.sort((a,b)=>{let va,vb;switch(key){case'price':va=a.price||0;vb=b.price||0;break;case'art_score':va=a.art_score||0;vb=b.art_score||0;break;case'value_score':va=a.value_score||0;vb=b.value_score||0;break;case'state':va=a.state||'';vb=b.state||'';break;default:va=a.title.toLowerCase();vb=b.title.toLowerCase();}return va<vb?-dir:va>vb?dir:0;});
   tbl();
 }
 
 function scoreColor(v){
   if(!v)return '#222';
-  // Dynamic color based on score range (works for 0-100)
   const t=Math.max(0,Math.min(1,v/100));
   const h=Math.round(t*120);
   if(v>=70)return `hsl(${h},70%,55%)`;
@@ -900,13 +1040,14 @@ function tbl(){
     const absIdx=s+idx;
     const tags=[
       ...i.tags.mediums.map(t=>`<span class="tag medium">${t}</span>`),
-      ...(i.clip_styles||[]).slice(0,1).map(s=>`<span class="tag style">${s.style}</span>`),
+      ...i.tags.subjects.slice(0,1).map(t=>`<span class="tag subject">${t}</span>`),
+      ...i.tags.moods.slice(0,1).map(t=>`<span class="tag mood">${t}</span>`),
       ...(i.artist?[`<span class="tag artist">${i.artist}</span>`]:[]),
       ...i.tags.flags.map(t=>`<span class="tag">${t}</span>`),
     ].join('');
     const v=i.art_score||0;
     const vs=i.value_score;
-    return `<tr onclick="openCard(${absIdx},this.querySelector('.thumb'))" style="cursor:pointer"><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc">${i.title}</td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${RL[i.region]||i.region}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs*10):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
+    return `<tr onclick="openCard(${absIdx},this.querySelector('.thumb'))" style="cursor:pointer"><td><img class="thumb" src="${i.images[0]}" loading="lazy"></td><td class="tc">${i.title}</td><td>${i.price?'$'+i.price.toLocaleString():'\u2014'}</td><td>${stateLabel(i)}</td><td>${tags||'\u2014'}</td><td class="sc" style="color:${scoreColor(v)}">${v?v.toFixed(1):'\u2014'}</td><td class="sc" style="color:${vs?scoreColor(vs*10):'#222'}">${vs?vs.toFixed(1):'\u2014'}</td></tr>`;
   }).join('');
   pagi();
 }
@@ -1083,9 +1224,10 @@ function populateCard(painting){
   // Meta
   const metaRows=[];
   if(painting.price) metaRows.push({l:'Price',v:'$'+painting.price.toLocaleString()});
-  metaRows.push({l:'Region',v:RL[painting.region]||painting.region});
+  metaRows.push({l:'State',v:stateLabel(painting)});
+  if(painting.region) metaRows.push({l:'Region',v:painting.region});
   if(painting.location) metaRows.push({l:'Location',v:painting.location});
-  if(painting.date_posted) metaRows.push({l:'Posted',v:painting.date_posted});
+  if(painting.posted) metaRows.push({l:'Posted',v:painting.posted});
   document.getElementById('card-meta').innerHTML=metaRows.map(r=>
     `<div class="acard-meta-row"><span class="ml">${r.l}</span><span class="mv">${r.v}</span></div>`
   ).join('');
@@ -1097,6 +1239,9 @@ function populateCard(painting){
   if(painting.quality_score!=null) scores.push({l:'Quality',v:painting.quality_score,max:100});
   if(painting.uniqueness!=null) scores.push({l:'Unique',v:painting.uniqueness,max:100});
   if(painting.aesthetic_score!=null) scores.push({l:'Aesthetic',v:painting.aesthetic_score,max:10});
+  if(painting.aesthetic2!=null) scores.push({l:'Aesth2',v:painting.aesthetic2,max:100});
+  if(painting.topiq_score!=null) scores.push({l:'TOPIQ',v:painting.topiq_score,max:100});
+  if(painting.musiq_score!=null) scores.push({l:'MUSIQ',v:painting.musiq_score,max:100});
 
   document.getElementById('card-scores').innerHTML=scores.map(s=>{
     const pct=Math.min(100,(s.v/s.max)*100).toFixed(1);
@@ -1109,14 +1254,36 @@ function populateCard(painting){
   const t=painting.tags;
   const tagHtml=[
     ...t.mediums.map(m=>`<span class="tag medium">${m}</span>`),
-    ...(painting.clip_styles||[]).map(s=>`<span class="tag style">${s.style}</span>`),
+    ...t.subjects.map(s=>`<span class="tag subject">${s}</span>`),
+    ...t.moods.map(m=>`<span class="tag mood">${m}</span>`),
     ...(painting.artist?[`<span class="tag artist">${painting.artist}</span>`]:[]),
     ...t.flags.map(f=>`<span class="tag">${f}</span>`),
   ].join('');
   document.getElementById('card-tags').innerHTML=tagHtml||'<span style="color:#333;font-size:9px">None</span>';
 
+  // Colors
+  const colorsHead=document.getElementById('card-colors-head');
+  const colorsEl=document.getElementById('card-colors');
+  if(painting.colors&&painting.colors.length){
+    colorsHead.style.display='';
+    let html=painting.colors.map(c=>
+      `<div style="width:24px;height:24px;background:${c.hex};border:1px solid #1a1a1a" title="${c.hex} (${Math.round(c.pct*100)}%)"></div>`
+    ).join('');
+    if(painting.color_tags&&painting.color_tags.length){
+      html+='<div style="display:flex;flex-wrap:wrap;gap:4px;width:100%;margin-top:4px">'+
+        painting.color_tags.map(t=>`<span class="tag" style="border-color:${TAG_COLORS[t]||'#222'};color:${TAG_COLORS[t]||'#555'}">${t}</span>`).join('')+
+        '</div>';
+    }
+    colorsEl.innerHTML=html;
+  } else {
+    colorsHead.style.display='none';
+    colorsEl.innerHTML='';
+  }
+
   // Link
-  document.getElementById('card-link').href=painting.url||'#';
+  const linkEl=document.getElementById('card-link');
+  linkEl.href=painting.url||'#';
+  linkEl.innerHTML=(painting.url&&painting.url.includes('ebay')?'View on eBay':'View Listing')+' &#8599;';
 
   // Position
   document.getElementById('card-pos').textContent=(cardIndex+1)+' of '+exp.length;

@@ -499,6 +499,126 @@ def score_chunk(paintings, clip_model, preprocess, tokenizer, aesthetic_model, d
     return scored, embeddings
 
 
+# ─── STREAMING SCORER ───
+
+class StreamingScorer:
+    """Holds pre-loaded models + Redis and scores paintings as they arrive.
+
+    Used by `stevenson update --stream` to score scraper batches incrementally
+    instead of waiting for all scraping to finish.
+    """
+
+    def __init__(self, chunk_size=200):
+        print("\nLoading models...")
+        self.clip_model, self.preprocess, self.tokenizer, self.device = load_clip()
+        self.aesthetic_model = load_aesthetic_model(self.device)
+
+        # Connect to Redis
+        self.redis_client = None
+        self.redis_binary = None
+        try:
+            import redis
+            from push import get_redis_url, get_redis_binary, ensure_vector_index
+            self.redis_client = redis.from_url(get_redis_url(), decode_responses=True)
+            self.redis_client.ping()
+            print("Connected to Redis")
+            self.redis_binary = get_redis_binary()
+            ensure_vector_index(self.redis_binary)
+        except Exception as e:
+            print(f"Warning: Redis unavailable ({e}), scoring without push")
+
+        self.chunk_size = chunk_size
+        self.buffer = []  # (source_name, pid, painting_dict) tuples
+        self.stores = {}  # source_name -> store_dict, for writeback
+        self.chunk_idx = 0
+        self.total_scored = 0
+        self.total_pushed = 0
+        THUMB_DIR.mkdir(exist_ok=True)
+
+    def register_store(self, source, store):
+        """Register a store so scored paintings can be saved back."""
+        self.stores[source] = store
+
+    def add(self, source, items):
+        """Buffer new unscored paintings. Auto-scores when buffer fills.
+
+        items: list of (pid, painting_dict) tuples
+        """
+        for pid, p in items:
+            if p.get("art_score") is None and p.get("images"):
+                self.buffer.append((source, pid, p))
+        while len(self.buffer) >= self.chunk_size:
+            self._flush_chunk(self.buffer[:self.chunk_size])
+            self.buffer = self.buffer[self.chunk_size:]
+
+    def flush(self):
+        """Score any remaining paintings in the buffer."""
+        if self.buffer:
+            self._flush_chunk(self.buffer)
+            self.buffer = []
+
+    def _flush_chunk(self, items):
+        """Score a chunk and push to Redis. Reuses existing score_chunk()."""
+        paintings = [p for _, _, p in items]
+        self.chunk_idx += 1
+        chunk_dir = THUMB_DIR / f"stream_{self.chunk_idx}"
+
+        print(f"\n--- Chunk {self.chunk_idx} ({len(paintings)} paintings) ---")
+
+        scored, embeddings = score_chunk(
+            paintings, self.clip_model, self.preprocess, self.tokenizer,
+            self.aesthetic_model, self.device, chunk_dir,
+        )
+
+        if not scored:
+            print("  No images scored in this chunk")
+            return
+
+        self.total_scored += len(scored)
+
+        # Push to Redis
+        if self.redis_client:
+            from push import push_paintings, push_embeddings
+            pushed, _ = push_paintings(scored, self.redis_client)
+            self.total_pushed += pushed
+            emb_count = 0
+            if self.redis_binary and embeddings:
+                emb_count = push_embeddings(embeddings, self.redis_binary)
+            print(f"  Scored {len(scored)} — pushed {pushed} to Redis, "
+                  f"{emb_count} embeddings ({self.total_scored} total scored)")
+        else:
+            print(f"  Scored {len(scored)} ({self.total_scored} total scored)")
+
+        # Save affected stores (score_chunk modifies paintings in-place)
+        sources_in_chunk = {source for source, _, _ in items}
+        for source in sources_in_chunk:
+            if source in self.stores:
+                save_store(source, self.stores[source])
+
+    def finalize(self):
+        """Push final stats to Redis and print summary."""
+        if self.redis_client and self.total_pushed > 0:
+            from push import push_stats
+            # Load ALL stores (not just registered ones) for accurate stats
+            all_stores = load_all_stores()
+            all_paintings = []
+            for store in all_stores.values():
+                all_paintings.extend(
+                    p for p in store["listings"].values() if p.get("images")
+                )
+            stats = push_stats(all_paintings, self.redis_client)
+            print(f"\nRedis stats updated: {stats.get('scored_count', 0)} scored, "
+                  f"{stats.get('total_listings', 0)} total")
+
+        if self.total_scored:
+            print(f"\n{'='*50}")
+            print(f"  Streaming scoring complete")
+            print(f"{'='*50}")
+            print(f"  Total scored: {self.total_scored}")
+            if self.redis_client:
+                print(f"  Total pushed: {self.total_pushed}")
+
+
 # ─── MAIN PIPELINE ───
 
 def score_paintings(

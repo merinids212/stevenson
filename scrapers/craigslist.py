@@ -1,6 +1,7 @@
 """Craigslist US paintings scraper."""
 
 import json
+import random
 import re
 import time
 from urllib.parse import urlencode
@@ -14,6 +15,11 @@ from .base import BaseScraper, Listing
 class CraigslistScraper(BaseScraper):
     source = "cl"
 
+    QUERY_POOL = [
+        "painting", "oil painting", "original art", "artwork",
+        "watercolor", "acrylic painting", "canvas art", "fine art",
+    ]
+
     # Every US Craigslist subdomain, keyed by state
     US_REGIONS: dict[str, list[str]] = {
         "al": ["auburn", "bham", "dothan", "shoals", "gadsden", "huntsville", "mobile", "montgomery", "tuscaloosa"],
@@ -24,7 +30,7 @@ class CraigslistScraper(BaseScraper):
             "bakersfield", "chico", "fresno", "goldcountry", "hanford", "humboldt",
             "imperial", "inlandempire", "losangeles", "mendocino", "merced", "modesto",
             "monterey", "orangecounty", "palmsprings", "redding", "sacramento", "sandiego",
-            "sfbay", "slo", "santabarbara", "santacruz", "santamaria", "siskiyou",
+            "sfbay", "slo", "santabarbara", "santamaria", "siskiyou",
             "stockton", "susanville", "ventura", "visalia", "yubasutter",
         ],
         "co": ["boulder", "cosprings", "denver", "eastco", "fortcollins", "rockies", "pueblo", "westslope"],
@@ -177,9 +183,11 @@ class CraigslistScraper(BaseScraper):
         m = re.search(r"/(\d+)\.html", url)
         return m.group(1) if m else ""
 
-    def _build_search_url(self, region: str, query: str, **filters) -> str:
+    def _build_search_url(self, region: str, query: str, offset: int = 0, **filters) -> str:
         base = f"https://{region}.craigslist.org/search/sss"
         params = {"query": query, "sort": "date"}
+        if offset > 0:
+            params["s"] = offset
         if filters.get("min_price"):
             params["min_price"] = filters["min_price"]
         if filters.get("max_price"):
@@ -285,6 +293,14 @@ class CraigslistScraper(BaseScraper):
             )
         return results
 
+    ART_KEYWORDS = [
+        "paint", "art", "canvas", "oil", "watercolor", "acrylic",
+        "framed", "lithograph", "print", "portrait", "landscape",
+        "sculpture", "drawing", "sketch", "etching", "serigraph",
+        "giclée", "giclee", "pastel", "gouache", "encaustic",
+        "mural", "gallery",
+    ]
+
     def _is_likely_painting(self, listing: Listing) -> bool:
         title = listing.title.lower()
         # Price sanity — CL listings over $500K are spam/jokes
@@ -293,35 +309,54 @@ class CraigslistScraper(BaseScraper):
         for kw in self.JUNK_KEYWORDS:
             if kw in title:
                 return False
-        if "paint" not in title and "art" not in title and "canvas" not in title:
+        if not any(kw in title for kw in self.ART_KEYWORDS):
             return False
         return True
+
+    RESULTS_PER_PAGE = 120  # CL returns up to 120 results per page
 
     def _scrape_region(
         self, region: str, query: str = "painting",
         min_price: int | None = None, max_price: int | None = None,
-        has_image: bool = True,
+        has_image: bool = True, max_pages: int = 1, delay: float = 1.0,
     ) -> list[Listing]:
-        url = self._build_search_url(
-            region, query, min_price=min_price, max_price=max_price, has_image=has_image,
-        )
-        print(f"  {region}: {url}")
-        html = self._fetch_page(url)
-        if not html:
-            return []
-        return self._extract_listings(html, region)
+        all_listings: list[Listing] = []
+        for page in range(max_pages):
+            offset = page * self.RESULTS_PER_PAGE
+            url = self._build_search_url(
+                region, query, offset=offset,
+                min_price=min_price, max_price=max_price, has_image=has_image,
+            )
+            if page == 0:
+                print(f"  {region}: {url}")
+            else:
+                print(f"  {region} p{page+1}: {url}")
+            html = self._fetch_page(url)
+            if not html:
+                break
+            page_listings = self._extract_listings(html, region)
+            if not page_listings:
+                break
+            all_listings.extend(page_listings)
+            if page < max_pages - 1 and delay > 0:
+                time.sleep(delay)
+        return all_listings
 
     def scrape(
         self,
         regions: list[str] | None = None,
         states: list[str] | None = None,
         query: str = "painting",
+        queries: list[str] | None = None,
+        num_queries: int | None = None,
         min_price: int | None = None,
         max_price: int | None = None,
         has_image: bool = True,
         delay: float = 1.0,
+        max_pages: int = 1,
         known_ids: set[str] | None = None,
-    ) -> list[Listing]:
+    ):
+        """Yield batches of filtered, deduped listings per region."""
         if regions is not None:
             target = regions
         elif states is not None:
@@ -331,60 +366,55 @@ class CraigslistScraper(BaseScraper):
         else:
             target = self.all_regions()
 
+        # Resolve query list
+        if queries:
+            query_list = queries
+        elif num_queries and num_queries > 1:
+            query_list = random.sample(
+                self.QUERY_POOL, min(num_queries, len(self.QUERY_POOL))
+            )
+        else:
+            query_list = [query]
+
+        print(f"  Queries: {query_list}", flush=True)
+        print(f"  Max pages per region/query: {max_pages}", flush=True)
+        print(f"  Regions: {len(target)}\n", flush=True)
+
         if known_ids is None:
             known_ids = set()
 
-        all_listings: list[Listing] = []
         seen_ids: set[str] = set(known_ids)
-        total_new = 0
-        total_known = 0
-        skipped_regions = 0
+        seen_titles: set[str] = set()
 
         for i, region in enumerate(target):
-            listings = self._scrape_region(
-                region, query, min_price=min_price, max_price=max_price, has_image=has_image,
-            )
+            region_batch: list[Listing] = []
 
-            # Check how many are new vs already known
-            new_in_region = []
-            known_in_region = 0
-            for listing in listings:
-                if listing.id and listing.id in seen_ids:
-                    known_in_region += 1
-                else:
+            for q in query_list:
+                listings = self._scrape_region(
+                    region, q, min_price=min_price, max_price=max_price,
+                    has_image=has_image, max_pages=max_pages, delay=delay,
+                )
+
+                for listing in listings:
+                    if listing.id and listing.id in seen_ids:
+                        continue
                     if listing.id:
                         seen_ids.add(listing.id)
-                    new_in_region.append(listing)
+                    region_batch.append(listing)
 
-            if listings and not new_in_region:
-                skipped_regions += 1
-            elif new_in_region:
-                all_listings.extend(new_in_region)
-                total_new += len(new_in_region)
+            # Dedup by title (cross-region reposts)
+            deduped = []
+            for listing in region_batch:
+                if listing.title not in seen_titles:
+                    seen_titles.add(listing.title)
+                    deduped.append(listing)
 
-            total_known += known_in_region
+            # Filter junk
+            clean = [l for l in deduped if self._is_likely_painting(l)]
+
+            if clean:
+                print(f"    → {region}: {len(clean)} paintings", flush=True)
+                yield clean
 
             if i < len(target) - 1 and delay > 0:
                 time.sleep(delay)
-
-        # Deduplicate by title (catches cross-region reposts with different IDs)
-        seen_titles: set[str] = set()
-        unique: list[Listing] = []
-        for listing in all_listings:
-            if listing.title not in seen_titles:
-                seen_titles.add(listing.title)
-                unique.append(listing)
-        title_dupes = len(all_listings) - len(unique)
-
-        # Filter junk
-        before = len(unique)
-        unique = [l for l in unique if self._is_likely_painting(l)]
-        junk = before - len(unique)
-
-        state_count = len({l.state for l in unique if l.state})
-        print(f"\nTotal: {len(unique)} paintings across {len(target)} regions "
-              f"({state_count} states)")
-        print(f"  {total_new} new, {total_known} already known, "
-              f"{skipped_regions} regions all-known")
-        print(f"  {title_dupes} cross-region title dupes, {junk} junk filtered")
-        return unique

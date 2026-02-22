@@ -207,9 +207,14 @@ def save_csv(listings: list[dict], path: Path):
 
 # ─── Source runners ───
 
-def run_craigslist(args, known_ids: set[str] | None = None) -> list:
+def run_craigslist(args, known_ids: set[str] | None = None):
+    """Generator: yields batches of CL listings per region."""
     regions = [args.region] if args.region else None
     states = [s.lower() for s in args.state] if args.state else None
+
+    cl_queries = getattr(args, "cl_queries", None)
+    num_cl_queries = getattr(args, "num_cl_queries", None)
+    cl_max_pages = getattr(args, "cl_max_pages", 1)
 
     if args.region:
         label = args.region
@@ -217,27 +222,31 @@ def run_craigslist(args, known_ids: set[str] | None = None) -> list:
         label = ", ".join(s.upper() for s in states)
     else:
         label = "all US"
-    print(f'Scraping Craigslist {label} for "{args.query}"...\n')
+    print(f'Scraping Craigslist {label}...\n', flush=True)
 
     scraper = CraigslistScraper()
-    return scraper.scrape(
+    yield from scraper.scrape(
         regions=regions,
         states=states,
         query=args.query,
+        queries=cl_queries,
+        num_queries=num_cl_queries,
         min_price=args.min_price,
         max_price=args.max_price,
         has_image=not args.no_image,
         delay=args.delay,
+        max_pages=cl_max_pages,
         known_ids=known_ids,
     )
 
 
-def run_ebay(args, known_ids: set[str]) -> list:
+def run_ebay(args, known_ids: set[str]):
+    """Generator: yields batches of eBay listings per query."""
     queries = args.ebay_queries if args.ebay_queries else None
-    print(f"Scraping eBay for paintings...\n")
+    print(f"Scraping eBay for paintings...\n", flush=True)
 
     scraper = EbayScraper()
-    return scraper.scrape(
+    yield from scraper.scrape(
         queries=queries,
         num_queries=args.num_queries,
         min_price=args.min_price,
@@ -281,6 +290,12 @@ def main():
                         help="CL state(s) (e.g. ca ny tx fl)")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Delay between CL regions (default: 1.0)")
+    parser.add_argument("--cl-queries", nargs="+", default=None,
+                        help="Explicit CL queries (overrides --query)")
+    parser.add_argument("--num-cl-queries", type=int, default=None,
+                        help="Pick N random queries from CL query pool")
+    parser.add_argument("--cl-max-pages", type=int, default=3,
+                        help="Max CL pages per region/query (default: 3)")
 
     # eBay
     parser.add_argument("--ebay-queries", nargs="+", default=None,
@@ -310,31 +325,38 @@ def main():
     if args.source in ("craigslist", "all"):
         store = load_store("craigslist")
         known_ids = set(store["listings"].keys())
-        print(f"  Store has {len(known_ids)} existing CL listings\n")
-        listings = run_craigslist(args, known_ids=known_ids)
-        if listings:
-            new, updated = merge_into_store(store, listings)
+        print(f"  Store has {len(known_ids)} existing CL listings\n", flush=True)
+        total_new = total_updated = 0
+        for batch in run_craigslist(args, known_ids=known_ids):
+            new, updated = merge_into_store(store, batch)
+            total_new += new
+            total_updated += updated
             store["meta"]["last_run"] = now
-            store["meta"]["total_runs"] += 1
-            store["meta"]["total_scraped"] += len(listings)
+            store["meta"]["total_scraped"] += len(batch)
             save_store("craigslist", store)
-            print(f"  Craigslist: {new} new, {updated} updated, "
-                  f"{len(store['listings'])} total in store\n")
+        if total_new or total_updated:
+            store["meta"]["total_runs"] += 1
+            save_store("craigslist", store)
+            print(f"  Craigslist: {total_new} new, {total_updated} updated, "
+                  f"{len(store['listings'])} total in store\n", flush=True)
 
     if args.source in ("ebay", "all"):
         store = load_store("ebay")
         known_ids = set(store["listings"].keys())
-        print(f"  Store has {len(known_ids)} existing listings\n")
-
-        listings = run_ebay(args, known_ids)
-        if listings:
-            new, updated = merge_into_store(store, listings)
+        print(f"  Store has {len(known_ids)} existing listings\n", flush=True)
+        total_new = total_updated = 0
+        for batch in run_ebay(args, known_ids):
+            new, updated = merge_into_store(store, batch)
+            total_new += new
+            total_updated += updated
             store["meta"]["last_run"] = now
-            store["meta"]["total_runs"] += 1
-            store["meta"]["total_scraped"] += len(listings)
+            store["meta"]["total_scraped"] += len(batch)
             save_store("ebay", store)
-            print(f"  eBay: {new} new, {updated} updated, "
-                  f"{len(store['listings'])} total in store\n")
+        if total_new or total_updated:
+            store["meta"]["total_runs"] += 1
+            save_store("ebay", store)
+            print(f"  eBay: {total_new} new, {total_updated} updated, "
+                  f"{len(store['listings'])} total in store\n", flush=True)
 
     # ─── Export phase ───
     if args.export or args.push:

@@ -20,14 +20,14 @@ import redis
 
 
 def get_redis_url() -> str:
-    url = os.environ.get("REDIS_URL") or os.environ.get("stevenson_REDIS_URL")
+    url = os.environ.get("REDIS_URL")
     if url:
         return url
     # Try .env.local
     env_path = Path(__file__).parent / ".env.local"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
-            if line.startswith("REDIS_URL=") or line.startswith("stevenson_REDIS_URL="):
+            if line.startswith("REDIS_URL="):
                 return line.split("=", 1)[1].strip().strip('"')
     print("Error: REDIS_URL not set")
     sys.exit(1)

@@ -168,7 +168,8 @@ class EbayScraper(BaseScraper):
         delay: float = 2.0,
         known_ids: set[str] | None = None,
         **kwargs,
-    ) -> list[Listing]:
+    ):
+        """Yield batches of filtered, deduped listings per query."""
         # Pick queries: explicit list, or random subset from pool
         if queries is not None:
             run_queries = list(queries)
@@ -178,16 +179,13 @@ class EbayScraper(BaseScraper):
 
         # Pick a random sort order for this run
         sort_code, sort_name = random.choice(SORT_OPTIONS)
-        print(f"  Sort: {sort_name}")
-        print(f"  Queries: {run_queries}")
+        print(f"  Sort: {sort_name}", flush=True)
+        print(f"  Queries: {run_queries}", flush=True)
 
         if known_ids is None:
             known_ids = set()
 
-        all_listings: list[Listing] = []
         seen_ids: set[str] = set(known_ids)
-        total_fetches = 0
-        total_skipped = 0
 
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -213,37 +211,33 @@ class EbayScraper(BaseScraper):
                 start_page = random.randint(1, 3)
                 end_page = start_page + max_pages - 1
 
-                print(f'\n  Query: "{query}" (pages {start_page}-{end_page})')
+                print(f'\n  Query: "{query}" (pages {start_page}-{end_page})', flush=True)
+                query_batch: list[Listing] = []
+                blocked = False
+
                 for pg in range(start_page, end_page + 1):
                     url = self._build_search_url(
                         query, pg, sort_code, min_price, max_price,
                     )
-                    print(f"    Page {pg}: {url}")
+                    print(f"    Page {pg}: {url}", flush=True)
 
                     try:
                         page.goto(url, wait_until="domcontentloaded", timeout=30000)
                         # Humanlike wait — vary between 2-4s
                         page.wait_for_timeout(random.randint(2000, 4000))
                     except Exception as e:
-                        print(f"    Failed to load: {e}")
+                        print(f"    Failed to load: {e}", flush=True)
                         break
 
                     if "Pardon" in page.title():
-                        print("    Blocked by eBay — stopping.")
-                        browser.close()
-                        # Return what we have so far
-                        before = len(all_listings)
-                        filtered = [l for l in all_listings if self._is_likely_painting(l)]
-                        junk = before - len(filtered)
-                        print(f"\nTotal: {len(filtered)} new paintings "
-                              f"({total_skipped} dupes skipped, {junk} junk filtered, "
-                              f"{total_fetches} pages fetched)")
-                        return filtered
+                        print("    Blocked by eBay — stopping.", flush=True)
+                        blocked = True
+                        break
 
                     html = page.content()
                     page_listings = self._parse_listings(html)
                     if not page_listings:
-                        print(f"    No results on page {pg}, stopping query.")
+                        print(f"    No results on page {pg}, stopping query.", flush=True)
                         break
 
                     new = 0
@@ -253,34 +247,31 @@ class EbayScraper(BaseScraper):
                             skipped += 1
                             continue
                         seen_ids.add(listing.id)
-                        all_listings.append(listing)
+                        query_batch.append(listing)
                         new += 1
-                    total_skipped += skipped
-                    print(f"    Got {len(page_listings)} items, {new} new, {skipped} dupes")
-
-                    total_fetches += 1
+                    print(f"    Got {len(page_listings)} items, {new} new, {skipped} dupes", flush=True)
 
                     # Early bail: if >75% of page is dupes, move to next query
                     if len(page_listings) > 0 and skipped / len(page_listings) > 0.75:
-                        print(f"    High dupe rate ({skipped}/{len(page_listings)}) — skipping to next query")
+                        print(f"    High dupe rate ({skipped}/{len(page_listings)}) — next query", flush=True)
                         break
 
                     # Humanlike delay between pages — vary it
                     if pg < end_page:
                         time.sleep(delay + random.uniform(-0.5, 1.5))
 
+                # Filter junk and yield this query's batch
+                clean = [l for l in query_batch if self._is_likely_painting(l)]
+                if clean:
+                    print(f"    → \"{query}\": {len(clean)} paintings", flush=True)
+                    yield clean
+
+                if blocked:
+                    browser.close()
+                    return
+
                 # Delay between queries — longer, with variance
                 if query != run_queries[-1]:
                     time.sleep(delay + random.uniform(0, 2.0))
 
             browser.close()
-
-        # Filter junk
-        before = len(all_listings)
-        filtered = [l for l in all_listings if self._is_likely_painting(l)]
-        junk = before - len(filtered)
-
-        print(f"\nTotal: {len(filtered)} new paintings "
-              f"({total_skipped} dupes skipped, {junk} junk filtered, "
-              f"{total_fetches} pages fetched)")
-        return filtered
