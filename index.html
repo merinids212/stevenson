@@ -817,7 +817,7 @@
         const displayTotal = data.totalIndex || filtered.length;
         document.getElementById('nav-count').textContent = displayTotal.toLocaleString() + ' Objects';
         renderGrid();
-        if (window.location.hash) checkPermalink();
+        if (getIdFromUrl()) checkPermalink();
       })
       .catch(e => { if (e.name !== 'AbortError') console.error(e); });
   }
@@ -1256,7 +1256,7 @@
   }
 
   // Permalink
-  function checkPermalink() {
+  async function checkPermalink() {
     const id = getIdFromUrl();
     if (!id) return;
     let idx = filtered.findIndex(p => p.id === id);
@@ -1273,8 +1273,19 @@
       filtered = [...paintings];
       renderGrid();
       idx = filtered.findIndex(p => p.id === id);
-      if (idx >= 0) openDetail(idx);
+      if (idx >= 0) { openDetail(idx); return; }
     }
+    // Painting not in loaded set — fetch it directly
+    try {
+      const res = await fetch('/api/painting?id=' + encodeURIComponent(id));
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.painting) return;
+      paintings.unshift(data.painting);
+      filtered = [...paintings];
+      renderGrid();
+      openDetail(0);
+    } catch {}
   }
 
   // Browser back/forward
