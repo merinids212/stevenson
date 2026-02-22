@@ -402,6 +402,19 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ─── CLIP STATUS ─── */
+  .clip-status {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #444;
+    padding: 6px 0 0;
+    height: 20px;
+    transition: color 0.3s, opacity 0.8s;
+  }
+
+  .clip-status.ready { color: var(--green); }
+
   /* ─── DETAIL OVERLAY ─── */
   .detail-overlay {
     position: fixed;
@@ -521,6 +534,7 @@
              autocomplete="off" spellcheck="false">
       <button class="search-submit" id="search-submit">enter</button>
     </div>
+    <div class="clip-status" id="clip-status"></div>
   </div>
 
   <!-- FILTERS -->
@@ -636,6 +650,66 @@
   let fetchController = null;
   let detailIndex = -1;
 
+  // ─── CLIP SEMANTIC SEARCH ───
+  let clipReady = false;
+  let clipLoading = true;
+  let clipTokenizer = null;
+  let clipModel = null;
+  const embCache = {};
+
+  function updateClipStatus(text, isReady) {
+    const el = document.getElementById('clip-status');
+    if (!el) return;
+    el.textContent = text;
+    if (isReady) {
+      el.classList.add('ready');
+      setTimeout(() => { el.style.opacity = '0'; }, 2000);
+    }
+  }
+
+  // Lazy-load CLIP text encoder in background
+  import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3')
+    .then(async ({ AutoTokenizer, CLIPTextModelWithProjection }) => {
+      updateClipStatus('loading deep search...');
+      clipTokenizer = await AutoTokenizer.from_pretrained('Xenova/clip-vit-large-patch14');
+      clipModel = await CLIPTextModelWithProjection.from_pretrained(
+        'Xenova/clip-vit-large-patch14',
+        {
+          dtype: 'q8',
+          progress_callback: (p) => {
+            if (p.status === 'progress' && p.file && p.file.includes('model')) {
+              updateClipStatus('loading deep search ' + Math.round(p.progress || 0) + '%');
+            }
+          }
+        }
+      );
+      clipReady = true;
+      clipLoading = false;
+      updateClipStatus('deep search ready', true);
+    })
+    .catch(e => {
+      clipLoading = false;
+      updateClipStatus('');
+      console.warn('CLIP init:', e);
+    });
+
+  async function clipEncode(text) {
+    if (!clipReady) return null;
+    const key = text.toLowerCase().trim();
+    if (embCache[key]) return embCache[key];
+    const inputs = clipTokenizer(text, { padding: true, truncation: true });
+    const { text_embeds } = await clipModel(inputs);
+    const raw = text_embeds.data;
+    const vec = new Float32Array(768);
+    for (let i = 0; i < 768; i++) vec[i] = raw[i];
+    let norm = 0;
+    for (let i = 0; i < 768; i++) norm += vec[i] * vec[i];
+    norm = Math.sqrt(norm);
+    if (norm > 0) for (let i = 0; i < 768; i++) vec[i] /= norm;
+    embCache[key] = Array.from(vec);
+    return embCache[key];
+  }
+
   // ─── SEARCH INPUT ───
   const searchInput = document.getElementById('search-input');
   const searchSubmit = document.getElementById('search-submit');
@@ -727,7 +801,7 @@
   });
 
   // ─── TEXT SEARCH ───
-  function doSearch() {
+  async function doSearch() {
     if (!searchQuery) return;
     startLoading();
     updateClearButton();
@@ -735,16 +809,51 @@
     if (fetchController) fetchController.abort();
     fetchController = new AbortController();
 
-    fetch('/api/search?q=' + encodeURIComponent(searchQuery), { signal: fetchController.signal })
-      .then(r => r.json())
-      .then(data => {
-        paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
-        renderResults();
-        document.getElementById('results-count').textContent =
-          paintings.length + ' results for \u201c' + searchQuery + '\u201d';
-      })
-      .catch(e => { if (e.name !== 'AbortError') console.error(e); })
-      .finally(stopLoading);
+    try {
+      let data;
+      let usedClip = false;
+
+      // CLIP path: encode in browser, POST embedding
+      if (clipReady) {
+        const embedding = await clipEncode(searchQuery);
+        if (embedding) {
+          const resp = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embedding, text: searchQuery }),
+            signal: fetchController.signal
+          });
+          data = await resp.json();
+          usedClip = true;
+        }
+      }
+
+      // Vocab fallback with server-side stemming
+      if (!data) {
+        const resp = await fetch('/api/search?q=' + encodeURIComponent(searchQuery), {
+          signal: fetchController.signal
+        });
+        data = await resp.json();
+      }
+
+      paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+      renderResults();
+
+      let label = paintings.length + ' results for \u201c' + searchQuery + '\u201d';
+      if (usedClip) label += ' \u00b7 deep search';
+      document.getElementById('results-count').textContent = label;
+
+      // Hint if vocab returned empty and CLIP is still loading
+      if (!paintings.length && !usedClip && clipLoading) {
+        document.getElementById('empty-state').style.display = '';
+        document.getElementById('empty-state').querySelector('.empty-state-text').textContent =
+          'Deep search is loading \u2014 try again shortly';
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') console.error(e);
+    } finally {
+      stopLoading();
+    }
   }
 
   // ─── FILTER SEARCH ───
