@@ -53,140 +53,169 @@
     position: sticky;
     top: calc(48px + env(safe-area-inset-top, 0px));
     background: var(--bg);
-    padding: 20px 0 16px;
+    padding: 16px 0 0;
     z-index: 10;
-    border-bottom: 1px solid var(--mute);
   }
+
+  .search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #222;
+    transition: border-color 0.2s;
+  }
+
+  .search-row:focus-within { border-color: #555; }
+
+  .search-icon {
+    font-size: 14px;
+    color: #333;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .search-row:focus-within .search-icon { color: #666; }
 
   .search-input {
     width: 100%;
     font-family: var(--font);
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 300;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     background: none;
     border: none;
-    border-bottom: 1px solid #333;
     color: var(--bright);
-    padding: 8px 0;
+    padding: 10px 0;
     outline: none;
-    transition: border-color 0.2s;
   }
 
-  .search-input:focus { border-color: var(--bright); }
-  .search-input::placeholder { color: #333; }
+  .search-input::placeholder { color: #2a2a2a; }
 
-  .search-hint {
-    margin-top: 6px;
-    font-size: 9px;
-    color: #333;
-    letter-spacing: 0.04em;
+  .search-submit {
+    font-family: var(--font);
+    font-size: 8px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    background: none;
+    border: 1px solid #222;
+    border-radius: 3px;
+    color: #333;
+    padding: 4px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    display: none;
   }
 
-  /* ─── FILTER SECTIONS ─── */
+  .search-submit.visible { display: block; }
+  .search-submit:hover { color: var(--fg); border-color: #444; }
+
+  /* ─── FILTER PANEL ─── */
   .filters {
-    padding: 20px 0 0;
+    padding: 14px 0 0;
   }
 
-  .filter-section {
-    margin-bottom: 18px;
+  .filter-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 0;
   }
 
   .filter-label {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--dim);
-    margin-bottom: 8px;
+    color: #333;
+    flex-shrink: 0;
+    width: 52px;
+    text-align: right;
   }
 
   .filter-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
   }
 
   /* ─── CHIPS ─── */
   .chip {
     font-family: var(--font);
-    font-size: 10px;
-    letter-spacing: 0.03em;
+    font-size: 9px;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    background: var(--mute);
-    border: 1px solid #2a2a2a;
-    border-radius: 14px;
-    padding: 4px 12px;
+    background: none;
+    border: 1px solid #1e1e1e;
+    border-radius: 3px;
+    padding: 3px 8px;
     cursor: pointer;
-    color: var(--dim);
+    color: #444;
     transition: all 0.15s;
     user-select: none;
   }
 
-  .chip:hover { color: var(--fg); border-color: #444; }
+  .chip:hover { color: var(--fg); border-color: #333; }
 
   .chip.active {
     color: var(--bright);
-    border-color: var(--bright);
+    border-color: #666;
     background: #1a1a1a;
   }
 
   /* ─── COLOR PICKER ─── */
-  .color-row {
+  .color-row-wrap {
     display: flex;
-    gap: 10px;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+  }
+
+  .color-palette {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .color-dot {
-    width: 28px;
-    height: 28px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
     position: relative;
   }
 
   .color-dot:hover {
-    transform: scale(1.15);
+    transform: scale(1.25);
+    z-index: 2;
   }
 
   .color-dot.active {
     border-color: var(--bright);
-    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--bright);
-    transform: scale(1.1);
+    box-shadow: 0 0 0 1px var(--bg), 0 0 0 3px rgba(255,255,255,0.5);
+    transform: scale(1.2);
   }
 
-  .color-dot-label {
-    font-size: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #333;
-    text-align: center;
-    margin-top: 3px;
-  }
-
-  .color-dot-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
+  .color-sep {
+    width: 1px;
+    height: 14px;
+    background: #1a1a1a;
+    margin: 0 3px;
   }
 
   .tone-chips {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
   }
 
   /* ─── DIVIDER ─── */
   .divider {
     height: 1px;
-    background: var(--mute);
-    margin: 20px 0;
+    background: #1a1a1a;
+    margin: 16px 0;
   }
 
   /* ─── RESULTS ─── */
@@ -231,9 +260,10 @@
   @media (max-width: 600px) {
     .results-grid { grid-template-columns: repeat(3, 1fr); }
     .page { padding: 0 12px 60px; }
-    .search-input { font-size: 14px; }
-    .color-dot { width: 24px; height: 24px; }
-    .color-row { gap: 8px; }
+    .search-input { font-size: 13px; }
+    .filter-row { flex-direction: column; gap: 4px; }
+    .filter-label { text-align: left; width: auto; }
+    .color-dot { width: 22px; height: 22px; }
   }
   @media (max-width: 400px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
 
@@ -473,15 +503,18 @@
 <div class="page">
   <!-- SEARCH BAR -->
   <div class="search-bar">
-    <input class="search-input" id="search-input" type="text"
-           placeholder="sunset landscape, woman in blue, dark moody..."
-           autocomplete="off" spellcheck="false">
-    <div class="search-hint">Enter to search with CLIP visual similarity</div>
+    <div class="search-row">
+      <span class="search-icon">&#x2315;</span>
+      <input class="search-input" id="search-input" type="text"
+             placeholder="sunset landscape, woman in blue, dark moody..."
+             autocomplete="off" spellcheck="false">
+      <button class="search-submit" id="search-submit">enter</button>
+    </div>
   </div>
 
   <!-- FILTERS -->
   <div class="filters">
-    <div class="filter-section">
+    <div class="filter-row">
       <div class="filter-label">Subject</div>
       <div class="filter-chips" id="subject-chips">
         <button class="chip" data-type="subject" data-value="portrait">portrait</button>
@@ -497,7 +530,7 @@
       </div>
     </div>
 
-    <div class="filter-section">
+    <div class="filter-row">
       <div class="filter-label">Medium</div>
       <div class="filter-chips" id="medium-chips">
         <button class="chip" data-type="medium" data-value="oil">oil</button>
@@ -509,7 +542,7 @@
       </div>
     </div>
 
-    <div class="filter-section">
+    <div class="filter-row">
       <div class="filter-label">Mood</div>
       <div class="filter-chips" id="mood-chips">
         <button class="chip" data-type="mood" data-value="serene">serene</button>
@@ -521,50 +554,34 @@
       </div>
     </div>
 
-    <div class="filter-section">
+    <div class="filter-row">
       <div class="filter-label">Color</div>
-      <div class="color-row" id="color-dots">
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="red" style="background:#c0392b;"></div>
-          <div class="color-dot-label">red</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="orange" style="background:#e67e22;"></div>
-          <div class="color-dot-label">orange</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="yellow" style="background:#f1c40f;"></div>
-          <div class="color-dot-label">yellow</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="green" style="background:#27ae60;"></div>
-          <div class="color-dot-label">green</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="teal" style="background:#1abc9c;"></div>
-          <div class="color-dot-label">teal</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="blue" style="background:#2980b9;"></div>
-          <div class="color-dot-label">blue</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="purple" style="background:#8e44ad;"></div>
-          <div class="color-dot-label">purple</div>
-        </div>
-        <div class="color-dot-wrap">
-          <div class="color-dot" data-color="pink" style="background:#e84393;"></div>
-          <div class="color-dot-label">pink</div>
+      <div class="color-row-wrap">
+        <div class="color-palette" id="color-dots">
+          <div class="color-dot" data-color="red" style="background:#c0392b;" title="Red"></div>
+          <div class="color-dot" data-color="orange" style="background:#e67e22;" title="Orange"></div>
+          <div class="color-dot" data-color="yellow" style="background:#f1c40f;" title="Yellow"></div>
+          <div class="color-dot" data-color="green" style="background:#27ae60;" title="Green"></div>
+          <div class="color-dot" data-color="teal" style="background:#1abc9c;" title="Teal"></div>
+          <div class="color-dot" data-color="blue" style="background:#2980b9;" title="Blue"></div>
+          <div class="color-dot" data-color="purple" style="background:#8e44ad;" title="Purple"></div>
+          <div class="color-dot" data-color="pink" style="background:#e84393;" title="Pink"></div>
+          <div class="color-sep"></div>
+          <div class="color-dot" data-color="dark" style="background:#1a1a1a; border-color:#333;" title="Black/Dark"></div>
+          <div class="color-dot" data-color="light" style="background:#e8e4df;" title="White/Light"></div>
+          <div class="color-dot" data-color="warm" style="background:linear-gradient(135deg,#8b6914,#a0522d);" title="Brown/Earth"></div>
+          <div class="color-dot" data-color="muted" style="background:linear-gradient(135deg,#8a8a7a,#a09882);" title="Muted/Neutral"></div>
         </div>
       </div>
-      <div class="filter-label" style="margin-top:4px;">Tone</div>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-label">Tone</div>
       <div class="tone-chips" id="tone-chips">
         <button class="chip" data-type="color" data-value="warm">warm</button>
         <button class="chip" data-type="color" data-value="cool">cool</button>
-        <button class="chip" data-type="color" data-value="dark">dark</button>
-        <button class="chip" data-type="color" data-value="light">light</button>
-        <button class="chip" data-type="color" data-value="muted">muted</button>
         <button class="chip" data-type="color" data-value="vivid">vivid</button>
+        <button class="chip" data-type="color" data-value="muted">muted</button>
       </div>
     </div>
   </div>
@@ -610,7 +627,11 @@
 
   // ─── SEARCH INPUT ───
   const searchInput = document.getElementById('search-input');
-  let debounceTimer = null;
+  const searchSubmit = document.getElementById('search-submit');
+
+  searchInput.addEventListener('input', () => {
+    searchSubmit.classList.toggle('visible', searchInput.value.trim().length > 0);
+  });
 
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -626,8 +647,17 @@
       if (searchQuery) {
         searchQuery = '';
         searchInput.value = '';
+        searchSubmit.classList.remove('visible');
         showEmpty();
       }
+    }
+  });
+
+  searchSubmit.addEventListener('click', () => {
+    searchQuery = searchInput.value.trim();
+    if (searchQuery) {
+      clearFilters(true);
+      doSearch();
     }
   });
 
@@ -649,6 +679,7 @@
 
       searchQuery = '';
       searchInput.value = '';
+      searchSubmit.classList.remove('visible');
       doFilterSearch();
     });
   });
@@ -663,27 +694,21 @@
         dot.classList.remove('active');
       } else {
         document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
-        // Also deactivate tone chips if a hue is selected
-        document.querySelectorAll('.tone-chips .chip').forEach(c => {
-          if (c.classList.contains('active') && c.dataset.type === 'color') {
-            c.classList.remove('active');
-          }
-        });
+        document.querySelectorAll('.tone-chips .chip').forEach(c => c.classList.remove('active'));
         activeFilters.color = color;
         dot.classList.add('active');
       }
 
       searchQuery = '';
       searchInput.value = '';
+      searchSubmit.classList.remove('visible');
       doFilterSearch();
     });
   });
 
   // Tone chip click: deactivate color dots
   document.querySelectorAll('.tone-chips .chip').forEach(chip => {
-    const origHandler = chip.onclick;
     chip.addEventListener('click', () => {
-      // When a tone is selected, deactivate color dots
       if (chip.dataset.type === 'color') {
         document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
       }
@@ -876,6 +901,7 @@
   function clearAll() {
     searchQuery = '';
     searchInput.value = '';
+    searchSubmit.classList.remove('visible');
     activeFilters = {};
     document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.color-dot.active').forEach(d => d.classList.remove('active'));
