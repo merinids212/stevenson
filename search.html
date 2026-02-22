@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>STEVENSON — Search</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="stv-nav.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font: 'IBM Plex Mono', monospace;
+    --bg: #0a0a0a;
+    --fg: #d4d4d4;
+    --bright: #fff;
+    --dim: #555;
+    --mute: #1e1e1e;
+    --line: #1a1a1a;
+    --green: #30d158;
+    --blue: #5ac8fa;
+    --orange: #ff9f0a;
+    --pink: #ff375f;
+    --purple: #bf5af2;
+    --teal: #64d2ff;
+  }
+
+  html, body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    font-size: 11px;
+    height: 100%;
+  }
+
+  ::-webkit-scrollbar { width: 0; }
+
+  /* ─── LAYOUT ─── */
+  .page {
+    margin-top: calc(48px + env(safe-area-inset-top, 0px));
+    padding: 0 24px 60px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ─── SEARCH BAR ─── */
+  .search-bar {
+    position: sticky;
+    top: calc(48px + env(safe-area-inset-top, 0px));
+    background: var(--bg);
+    padding: 20px 0 16px;
+    z-index: 10;
+    border-bottom: 1px solid var(--mute);
+  }
+
+  .search-input {
+    width: 100%;
+    font-family: var(--font);
+    font-size: 18px;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #333;
+    color: var(--bright);
+    padding: 8px 0;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--bright); }
+  .search-input::placeholder { color: #333; }
+
+  .search-hint {
+    margin-top: 6px;
+    font-size: 9px;
+    color: #333;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* ─── FILTER SECTIONS ─── */
+  .filters {
+    padding: 20px 0 0;
+  }
+
+  .filter-section {
+    margin-bottom: 18px;
+  }
+
+  .filter-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ─── CHIPS ─── */
+  .chip {
+    font-family: var(--font);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: var(--mute);
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 4px 12px;
+    cursor: pointer;
+    color: var(--dim);
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .chip:hover { color: var(--fg); border-color: #444; }
+
+  .chip.active {
+    color: var(--bright);
+    border-color: var(--bright);
+    background: #1a1a1a;
+  }
+
+  /* ─── COLOR PICKER ─── */
+  .color-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+
+  .color-dot:hover {
+    transform: scale(1.15);
+  }
+
+  .color-dot.active {
+    border-color: var(--bright);
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--bright);
+    transform: scale(1.1);
+  }
+
+  .color-dot-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #333;
+    text-align: center;
+    margin-top: 3px;
+  }
+
+  .color-dot-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .tone-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* ─── DIVIDER ─── */
+  .divider {
+    height: 1px;
+    background: var(--mute);
+    margin: 20px 0;
+  }
+
+  /* ─── RESULTS ─── */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .results-count {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .results-clear {
+    font-family: var(--font);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    color: #444;
+    cursor: pointer;
+    transition: color 0.2s;
+    display: none;
+  }
+
+  .results-clear:hover { color: var(--bright); }
+  .results-clear.visible { display: block; }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+  }
+
+  @media (max-width: 900px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 600px) {
+    .results-grid { grid-template-columns: repeat(3, 1fr); }
+    .page { padding: 0 12px 60px; }
+    .search-input { font-size: 14px; }
+    .color-dot { width: 24px; height: 24px; }
+    .color-row { gap: 8px; }
+  }
+  @media (max-width: 400px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ─── RESULT CARD ─── */
+  .result-card {
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    background: var(--mute);
+    opacity: 0;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .result-card-img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+  }
+
+  .result-card:hover .result-card-img { transform: scale(1.05); }
+
+  .result-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    padding: 20px 8px 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .result-card:hover .result-card-info { opacity: 1; }
+
+  .result-card-title {
+    font-size: 9px;
+    color: #ccc;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .result-card-price {
+    font-size: 10px;
+    color: var(--teal);
+    margin-top: 3px;
+  }
+
+  .result-card-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+
+  .result-card-tag {
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #666;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 6px;
+  }
+
+  .result-card-colors {
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+  }
+
+  .result-card-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* ─── EMPTY STATE ─── */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #333;
+  }
+
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.3;
+  }
+
+  .empty-state-text {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ─── LOADING ─── */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    display: none;
+  }
+
+  .loading.active { display: block; }
+
+  .loading::after {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid #2a2a2a;
+    border-top-color: #555;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── DETAIL OVERLAY ─── */
+  .detail-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.92);
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  .detail-overlay.active { display: flex; }
+
+  .detail-close {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: 16px;
+    font-size: 20px;
+    color: #555;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s;
+    z-index: 310;
+  }
+
+  .detail-close:hover { color: var(--bright); }
+
+  .detail-img {
+    max-width: 80vw;
+    max-height: 55vh;
+    object-fit: contain;
+  }
+
+  .detail-meta {
+    text-align: center;
+    padding: 16px 20px;
+    max-width: 500px;
+  }
+
+  .detail-meta-title {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg);
+    margin-bottom: 6px;
+    line-height: 1.4;
+  }
+
+  .detail-meta-price {
+    font-size: 13px;
+    color: var(--teal);
+    margin-bottom: 4px;
+  }
+
+  .detail-meta-tags {
+    font-size: 9px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+
+  .detail-meta-colors {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .detail-meta-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .detail-meta-score {
+    font-size: 9px;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+
+  .detail-meta-link {
+    font-family: var(--font);
+    font-size: 9px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    transition: color 0.2s;
+  }
+
+  .detail-meta-link:hover { color: var(--bright); }
+</style>
+</head>
+<body>
+
+<nav class="stv-nav" data-stv-theme="dark" data-stv-page="search">
+  <span class="stv-nav-title">STEVENSON</span>
+  <span class="stv-nav-right" id="nav-right">SEARCH</span>
+</nav>
+
+<div class="page">
+  <!-- SEARCH BAR -->
+  <div class="search-bar">
+    <input class="search-input" id="search-input" type="text"
+           placeholder="sunset landscape, woman in blue, dark moody..."
+           autocomplete="off" spellcheck="false">
+    <div class="search-hint">Enter to search with CLIP visual similarity</div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <div class="filter-section">
+      <div class="filter-label">Subject</div>
+      <div class="filter-chips" id="subject-chips">
+        <button class="chip" data-type="subject" data-value="portrait">portrait</button>
+        <button class="chip" data-type="subject" data-value="landscape">landscape</button>
+        <button class="chip" data-type="subject" data-value="abstract">abstract</button>
+        <button class="chip" data-type="subject" data-value="still_life">still life</button>
+        <button class="chip" data-type="subject" data-value="figure">figure</button>
+        <button class="chip" data-type="subject" data-value="floral">floral</button>
+        <button class="chip" data-type="subject" data-value="seascape">seascape</button>
+        <button class="chip" data-type="subject" data-value="cityscape">cityscape</button>
+        <button class="chip" data-type="subject" data-value="animal">animal</button>
+        <button class="chip" data-type="subject" data-value="nude">nude</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-label">Medium</div>
+      <div class="filter-chips" id="medium-chips">
+        <button class="chip" data-type="medium" data-value="oil">oil</button>
+        <button class="chip" data-type="medium" data-value="watercolor">watercolor</button>
+        <button class="chip" data-type="medium" data-value="acrylic">acrylic</button>
+        <button class="chip" data-type="medium" data-value="pastel">pastel</button>
+        <button class="chip" data-type="medium" data-value="ink">ink</button>
+        <button class="chip" data-type="medium" data-value="mixed_media">mixed media</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-label">Mood</div>
+      <div class="filter-chips" id="mood-chips">
+        <button class="chip" data-type="mood" data-value="serene">serene</button>
+        <button class="chip" data-type="mood" data-value="dramatic">dramatic</button>
+        <button class="chip" data-type="mood" data-value="melancholy">melancholy</button>
+        <button class="chip" data-type="mood" data-value="joyful">joyful</button>
+        <button class="chip" data-type="mood" data-value="mysterious">mysterious</button>
+        <button class="chip" data-type="mood" data-value="romantic">romantic</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-label">Color</div>
+      <div class="color-row" id="color-dots">
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="red" style="background:#c0392b;"></div>
+          <div class="color-dot-label">red</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="orange" style="background:#e67e22;"></div>
+          <div class="color-dot-label">orange</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="yellow" style="background:#f1c40f;"></div>
+          <div class="color-dot-label">yellow</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="green" style="background:#27ae60;"></div>
+          <div class="color-dot-label">green</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="teal" style="background:#1abc9c;"></div>
+          <div class="color-dot-label">teal</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="blue" style="background:#2980b9;"></div>
+          <div class="color-dot-label">blue</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="purple" style="background:#8e44ad;"></div>
+          <div class="color-dot-label">purple</div>
+        </div>
+        <div class="color-dot-wrap">
+          <div class="color-dot" data-color="pink" style="background:#e84393;"></div>
+          <div class="color-dot-label">pink</div>
+        </div>
+      </div>
+      <div class="filter-label" style="margin-top:4px;">Tone</div>
+      <div class="tone-chips" id="tone-chips">
+        <button class="chip" data-type="color" data-value="warm">warm</button>
+        <button class="chip" data-type="color" data-value="cool">cool</button>
+        <button class="chip" data-type="color" data-value="dark">dark</button>
+        <button class="chip" data-type="color" data-value="light">light</button>
+        <button class="chip" data-type="color" data-value="muted">muted</button>
+        <button class="chip" data-type="color" data-value="vivid">vivid</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- RESULTS -->
+  <div class="results-header">
+    <span class="results-count" id="results-count"></span>
+    <button class="results-clear" id="results-clear" onclick="clearAll()">Clear all</button>
+  </div>
+
+  <div class="loading" id="loading"></div>
+
+  <div class="results-grid" id="results-grid"></div>
+
+  <div class="empty-state" id="empty-state" style="display:none;">
+    <div class="empty-state-text">Type a query or pick a filter to explore</div>
+  </div>
+</div>
+
+<!-- DETAIL OVERLAY -->
+<div class="detail-overlay" id="detail-overlay">
+  <button class="detail-close" onclick="closeDetail()">&times;</button>
+  <img class="detail-img" id="detail-img" src="" alt="">
+  <div class="detail-meta">
+    <div class="detail-meta-title" id="detail-title"></div>
+    <div class="detail-meta-price" id="detail-price"></div>
+    <div class="detail-meta-tags" id="detail-tags"></div>
+    <div class="detail-meta-colors" id="detail-colors"></div>
+    <div class="detail-meta-score" id="detail-score"></div>
+    <a class="detail-meta-link" id="detail-link" href="#" target="_blank" rel="noopener">View listing &nearr;</a>
+  </div>
+</div>
+
+<script>
+  // ─── STATE ───
+  let paintings = [];
+  let activeFilters = {}; // { subject: 'portrait', color: 'blue', ... }
+  let searchQuery = '';
+  let fetchController = null;
+  let detailIndex = -1;
+
+  // ─── SEARCH INPUT ───
+  const searchInput = document.getElementById('search-input');
+  let debounceTimer = null;
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchQuery = searchInput.value.trim();
+      if (searchQuery) {
+        clearFilters(true);
+        doSearch();
+      }
+    }
+    if (e.key === 'Escape') {
+      searchInput.blur();
+      if (searchQuery) {
+        searchQuery = '';
+        searchInput.value = '';
+        showEmpty();
+      }
+    }
+  });
+
+  // ─── CHIP CLICKS ───
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const type = chip.dataset.type;
+      const value = chip.dataset.value;
+
+      if (activeFilters[type] === value) {
+        delete activeFilters[type];
+        chip.classList.remove('active');
+      } else {
+        // Deactivate other chips of same type
+        document.querySelectorAll(`.chip[data-type="${type}"]`).forEach(c => c.classList.remove('active'));
+        activeFilters[type] = value;
+        chip.classList.add('active');
+      }
+
+      searchQuery = '';
+      searchInput.value = '';
+      doFilterSearch();
+    });
+  });
+
+  // ─── COLOR DOT CLICKS ───
+  document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const color = dot.dataset.color;
+
+      if (activeFilters.color === color) {
+        delete activeFilters.color;
+        dot.classList.remove('active');
+      } else {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+        // Also deactivate tone chips if a hue is selected
+        document.querySelectorAll('.tone-chips .chip').forEach(c => {
+          if (c.classList.contains('active') && c.dataset.type === 'color') {
+            c.classList.remove('active');
+          }
+        });
+        activeFilters.color = color;
+        dot.classList.add('active');
+      }
+
+      searchQuery = '';
+      searchInput.value = '';
+      doFilterSearch();
+    });
+  });
+
+  // Tone chip click: deactivate color dots
+  document.querySelectorAll('.tone-chips .chip').forEach(chip => {
+    const origHandler = chip.onclick;
+    chip.addEventListener('click', () => {
+      // When a tone is selected, deactivate color dots
+      if (chip.dataset.type === 'color') {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+      }
+    });
+  });
+
+  // ─── TEXT SEARCH ───
+  function doSearch() {
+    if (!searchQuery) return;
+    startLoading();
+    updateClearButton();
+
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+
+    fetch('/api/search?q=' + encodeURIComponent(searchQuery), { signal: fetchController.signal })
+      .then(r => r.json())
+      .then(data => {
+        paintings = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+        renderResults();
+        document.getElementById('results-count').textContent =
+          paintings.length + ' results for \u201c' + searchQuery + '\u201d';
+      })
+      .catch(e => { if (e.name !== 'AbortError') console.error(e); })
+      .finally(stopLoading);
+  }
+
+  // ─── FILTER SEARCH ───
+  function doFilterSearch() {
+    const keys = Object.keys(activeFilters);
+    updateClearButton();
+
+    if (keys.length === 0) {
+      showEmpty();
+      return;
+    }
+
+    startLoading();
+
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+
+    // Pick primary filter for API call (first active filter)
+    const primaryType = keys[0];
+    const primaryValue = activeFilters[primaryType];
+    const apiParam = primaryType === 'color' ? 'color' : primaryType;
+
+    fetch('/api/paintings?' + apiParam + '=' + encodeURIComponent(primaryValue),
+          { signal: fetchController.signal })
+      .then(r => r.json())
+      .then(data => {
+        let results = (data.paintings || []).filter(p => p.images && p.images.length > 0);
+
+        // Client-side drill-down: apply additional filters
+        for (const [type, value] of Object.entries(activeFilters)) {
+          if (type === primaryType) continue; // already filtered by API
+          results = results.filter(p => matchesFilter(p, type, value));
+        }
+
+        paintings = results;
+        renderResults();
+
+        const filterDesc = keys.map(k => activeFilters[k].replace('_', ' ')).join(' + ');
+        document.getElementById('results-count').textContent =
+          paintings.length + ' results \u2014 ' + filterDesc;
+      })
+      .catch(e => { if (e.name !== 'AbortError') console.error(e); })
+      .finally(stopLoading);
+  }
+
+  function matchesFilter(painting, type, value) {
+    if (type === 'subject') {
+      return painting.subjects && painting.subjects.some(s => s.tag === value);
+    }
+    if (type === 'medium') {
+      return painting.medium_tags && painting.medium_tags.some(m => m.tag === value);
+    }
+    if (type === 'mood') {
+      return painting.moods && painting.moods.some(m => m.tag === value);
+    }
+    if (type === 'color') {
+      return painting.color_tags && painting.color_tags.includes(value);
+    }
+    return true;
+  }
+
+  // ─── RENDER ───
+  function renderResults() {
+    const grid = document.getElementById('results-grid');
+    grid.innerHTML = '';
+    document.getElementById('empty-state').style.display = 'none';
+
+    if (!paintings.length) {
+      document.getElementById('empty-state').style.display = '';
+      document.getElementById('empty-state').querySelector('.empty-state-text').textContent =
+        'No paintings found — try different filters';
+      return;
+    }
+
+    paintings.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.style.animationDelay = Math.min(i * 0.02, 0.8) + 's';
+      card.onclick = () => openDetail(i);
+
+      // Tags for overlay
+      const tags = [];
+      if (p.subjects) p.subjects.forEach(s => tags.push(s.tag));
+      if (p.moods) p.moods.forEach(m => tags.push(m.tag));
+      if (p.medium_tags) p.medium_tags.forEach(m => tags.push(m.tag));
+
+      let tagsHtml = '';
+      if (tags.length) {
+        tagsHtml = '<div class="result-card-tags">' +
+          tags.slice(0, 3).map(t => '<span class="result-card-tag">' + t.replace('_', ' ') + '</span>').join('') +
+          '</div>';
+      }
+
+      let colorsHtml = '';
+      if (p.colors && p.colors.length) {
+        colorsHtml = '<div class="result-card-colors">' +
+          p.colors.slice(0, 4).map(c => '<div class="result-card-swatch" style="background:' + c.hex + ';"></div>').join('') +
+          '</div>';
+      }
+
+      const price = p.price ? '$' + p.price.toLocaleString() : '';
+      const title = (p.title || '').replace(/free shipping!?/gi, '').replace(/[!]+/g, '').trim();
+
+      card.innerHTML =
+        '<img class="result-card-img" src="' + p.images[0] + '" alt="" loading="lazy">' +
+        '<div class="result-card-info">' +
+          '<div class="result-card-title">' + title.substring(0, 50) + '</div>' +
+          (price ? '<div class="result-card-price">' + price + '</div>' : '') +
+          tagsHtml +
+          colorsHtml +
+        '</div>';
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ─── DETAIL ───
+  function openDetail(index) {
+    detailIndex = index;
+    const p = paintings[index];
+    if (!p) return;
+
+    const overlay = document.getElementById('detail-overlay');
+    document.getElementById('detail-img').src = p.images[0];
+    const title = (p.title || '').replace(/free shipping!?/gi, '').replace(/[!]+/g, '').trim();
+    document.getElementById('detail-title').textContent = title;
+    document.getElementById('detail-price').textContent = p.price ? '$' + p.price.toLocaleString() : '';
+
+    // Tags
+    const tags = [];
+    if (p.subjects) p.subjects.forEach(s => tags.push(s.tag));
+    if (p.moods) p.moods.forEach(m => tags.push(m.tag));
+    if (p.medium_tags) p.medium_tags.forEach(m => tags.push(m.tag));
+    document.getElementById('detail-tags').textContent = tags.map(t => t.replace('_', ' ')).join(' \u00b7 ');
+
+    // Colors
+    const colorsEl = document.getElementById('detail-colors');
+    colorsEl.innerHTML = '';
+    if (p.colors && p.colors.length) {
+      p.colors.forEach(c => {
+        const sw = document.createElement('div');
+        sw.className = 'detail-meta-swatch';
+        sw.style.backgroundColor = c.hex;
+        sw.title = c.hex + ' (' + Math.round(c.pct) + '%)';
+        colorsEl.appendChild(sw);
+      });
+    }
+
+    // Score
+    const scores = [];
+    if (p.art_score != null) scores.push('Score ' + Math.round(p.art_score));
+    if (p.aesthetic2 != null) scores.push('A2 ' + Math.round(p.aesthetic2));
+    document.getElementById('detail-score').textContent = scores.join(' \u00b7 ');
+
+    document.getElementById('detail-link').href = p.url || '#';
+    overlay.classList.add('active');
+  }
+
+  function closeDetail() {
+    document.getElementById('detail-overlay').classList.remove('active');
+    detailIndex = -1;
+  }
+
+  // ─── CLEAR ───
+  function clearAll() {
+    searchQuery = '';
+    searchInput.value = '';
+    activeFilters = {};
+    document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.color-dot.active').forEach(d => d.classList.remove('active'));
+    showEmpty();
+    updateClearButton();
+  }
+
+  function clearFilters(keepSearch) {
+    activeFilters = {};
+    document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.color-dot.active').forEach(d => d.classList.remove('active'));
+    if (!keepSearch) {
+      searchQuery = '';
+      searchInput.value = '';
+    }
+  }
+
+  function showEmpty() {
+    paintings = [];
+    document.getElementById('results-grid').innerHTML = '';
+    document.getElementById('results-count').textContent = '';
+    document.getElementById('empty-state').style.display = '';
+    document.getElementById('empty-state').querySelector('.empty-state-text').textContent =
+      'Type a query or pick a filter to explore';
+  }
+
+  function updateClearButton() {
+    const btn = document.getElementById('results-clear');
+    const hasFilters = Object.keys(activeFilters).length > 0 || searchQuery;
+    btn.classList.toggle('visible', !!hasFilters);
+  }
+
+  function startLoading() {
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('results-grid').innerHTML = '';
+    document.getElementById('empty-state').style.display = 'none';
+  }
+
+  function stopLoading() {
+    document.getElementById('loading').classList.remove('active');
+  }
+
+  // ─── KEYBOARD ───
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('detail-overlay').classList.contains('active')) {
+      if (e.key === 'Escape') closeDetail();
+      if (e.key === 'ArrowRight' && detailIndex < paintings.length - 1) openDetail(detailIndex + 1);
+      if (e.key === 'ArrowLeft' && detailIndex > 0) openDetail(detailIndex - 1);
+    }
+  });
+
+  // Show empty on load
+  showEmpty();
+</script>
+<script src="stv-nav.js"></script>
+</body>
+</html>

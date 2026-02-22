@@ -20,6 +20,7 @@
   // ── Side menu ──
   var pages = [
     { label: 'Gallery', href: '/', id: 'gallery' },
+    { label: 'Search', href: '/search.html', id: 'search' },
     { label: 'Feed', href: '/feed.html', id: 'feed' },
     { label: 'Taste Map', href: '/taste.html', id: 'taste' },
     { label: 'Analytics', href: '/analytics.html', id: 'analytics' },
