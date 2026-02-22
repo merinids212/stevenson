@@ -143,6 +143,12 @@ SEARCH_TERMS = [
     "love", "sadness", "joy", "anger", "fear",
     "hope", "loneliness", "freedom", "chaos", "harmony",
     "balance", "tension", "movement", "stillness", "energy",
+    "happy", "sad", "calm", "dark", "bright", "colorful",
+    "scary", "funny", "weird", "cool", "warm", "cold",
+    "pretty", "ugly", "old", "new", "big", "small",
+    "quiet", "loud", "soft", "hard", "sweet", "wild",
+    "creepy", "cute", "sexy", "spooky", "eerie", "gloomy",
+    "sunny", "rainy", "stormy", "foggy", "misty", "hazy",
     # Miscellaneous
     "vintage", "antique", "retro", "classic", "avant-garde",
     "experimental", "traditional", "innovative", "decorative", "functional",
