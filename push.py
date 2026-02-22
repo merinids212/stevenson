@@ -110,6 +110,10 @@ def push_paintings(paintings: list[dict], r):
 
         pipe.zadd(f"stv:idx:source:{source}", {pid: art_score})
 
+        # Track enriched paintings
+        if p.get("aesthetic2") is not None:
+            pipe.sadd("stv:enriched", pid)
+
         # Tag indexes
         if p.get("subjects"):
             for s in p["subjects"]:

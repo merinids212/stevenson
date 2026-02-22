@@ -244,6 +244,7 @@
   .log-ts { color: #333; white-space: nowrap; min-width: 60px; }
   .log-src { white-space: nowrap; min-width: 40px; text-transform: uppercase; }
   .log-src.score { color: var(--blue); }
+  .log-src.enrich { color: var(--orange); }
   .log-src.embed { color: var(--purple); }
   .log-msg { color: var(--dim); }
   .log-msg .n { color: var(--bright); font-weight: 500; }
@@ -283,12 +284,15 @@
 <div class="hero" id="hero">
   <div class="hero-stat"><div class="num">--</div><div class="lbl">Total</div><div class="sub">loading</div></div>
   <div class="hero-stat"><div class="num">--</div><div class="lbl">Scored</div><div class="sub">loading</div></div>
+  <div class="hero-stat"><div class="num">--</div><div class="lbl">Enriched</div><div class="sub">loading</div></div>
   <div class="hero-stat"><div class="num">--</div><div class="lbl">Embedded</div><div class="sub">loading</div></div>
-  <div class="hero-stat"><div class="num">--</div><div class="lbl">Likes</div><div class="sub">loading</div></div>
 </div>
 
 <div class="sec-head">Scoring Progress</div>
 <div class="progress-section" id="progress"></div>
+
+<div class="sec-head">Enrichment Progress</div>
+<div class="progress-section" id="enrich-progress"></div>
 
 <div class="sec-head">Embedding Progress</div>
 <div class="progress-section" id="embed-progress"></div>
@@ -304,11 +308,12 @@
   <div class="log" id="log"></div>
 </div>
 
-<div class="foot">Stevenson / Data Pipeline / CLIP ViT-L/14 + LAION Aesthetic + RediSearch KNN</div>
+<div class="foot">Stevenson / Data Pipeline / CLIP ViT-L/14 + LAION Aesthetic + pyIQA + RediSearch KNN</div>
 
 <script>
 let prevScored = null;
 let prevEmbedded = null;
+let prevEnriched = null;
 let logEntries = [];
 
 function fmt(n) { return n != null ? n.toLocaleString() : '--'; }
@@ -319,8 +324,8 @@ function render(d) {
   document.getElementById('hero').innerHTML = [
     { n: fmt(d.total_listings), l: 'Total Listings', s: d.sources.craigslist.total + d.sources.ebay.total + ' indexed' },
     { n: fmt(d.scored_count), l: 'Scored', s: d.score_pct + '% · CLIP + LAION' },
+    { n: fmt(d.enriched_count), l: 'Enriched', s: d.enrich_pct + '% · pyiqa + tags + colors' },
     { n: fmt(d.embedded_count), l: 'Embedded', s: d.embed_pct + '% · ' + vecStatus },
-    { n: fmt(d.likes_count), l: 'Likes', s: d.vec_index_ready ? 'FOR YOU ready' : 'awaiting embeddings' },
   ].map(s => `<div class="hero-stat"><div class="num">${s.n}</div><div class="lbl">${s.l}</div><div class="sub">${s.s}</div></div>`).join('');
 
   // Progress bar
@@ -335,6 +340,23 @@ function render(d) {
     <div class="progress-meta">
       <span>${isScoring ? 'Scorer active — pushing live' : pct >= 100 ? 'All paintings scored' : 'Scorer idle'}</span>
       <span>Score range: ${d.score_min.toFixed(1)} – ${d.score_max.toFixed(1)} · Median: ${d.median_art_score.toFixed(1)}</span>
+    </div>
+  `;
+
+  // Enrichment progress bar
+  const nPct = d.enrich_pct;
+  const isEnriching = prevEnriched !== null && d.enriched_count > prevEnriched;
+  const enrClass = isEnriching || (nPct > 0 && nPct < 100) ? ' scoring' : '';
+  const enrColor = nPct >= 100 ? 'var(--orange)' : nPct > 50 ? '#e6a817' : 'var(--orange)';
+  const vocabStatus = d.search_vocab_count > 0 ? d.search_vocab_count + ' search terms' : 'no search vocab';
+  document.getElementById('enrich-progress').innerHTML = `
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill${enrClass}" style="width:${nPct}%;background:${enrColor}"></div>
+      <div class="progress-bar-text">${nPct}% enriched — ${fmt(d.enriched_count)} of ${fmt(d.total_listings)}</div>
+    </div>
+    <div class="progress-meta">
+      <span>${isEnriching ? 'Enricher active — pushing live' : nPct >= 100 ? 'All paintings enriched' : nPct === 0 ? 'Run: stevenson enrich' : 'Enricher idle — run stevenson enrich to resume'}</span>
+      <span>${vocabStatus} · pyiqa + CLIP tags + colors</span>
     </div>
   `;
 
@@ -380,13 +402,17 @@ function render(d) {
   `;
 
   // Pipeline stats
+  const ti = d.tag_indexes || {};
   document.getElementById('pipe-stats').innerHTML = `
     <div class="stat-cell"><div class="num">${fmt(d.artists_count)}</div><div class="lbl">Artists Parsed</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.top_rated_count)}</div><div class="lbl">Top Rated (55+)</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.gems_count)}</div><div class="lbl">Gems (Value 8+)</div></div>
+    <div class="stat-cell"><div class="num">${fmt(d.enriched_count)}</div><div class="lbl">Enriched</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.embedded_count)}</div><div class="lbl">Embeddings</div></div>
+    <div class="stat-cell"><div class="num">${fmt(d.search_vocab_count)}</div><div class="lbl">Search Terms</div></div>
     <div class="stat-cell"><div class="num">${fmt(d.likes_count)}</div><div class="lbl">Likes</div></div>
     <div class="stat-cell"><div class="num">$${d.price_median.toLocaleString()}</div><div class="lbl">Median Price</div></div>
+    <div class="stat-cell"><div class="num">${fmt((ti.portrait||0)+(ti.landscape||0)+(ti.abstract||0))}</div><div class="lbl">Tagged (top 3)</div></div>
   `;
 
   // Live indicator
@@ -404,6 +430,14 @@ function render(d) {
     });
   }
 
+  if (prevEnriched !== null && d.enriched_count > prevEnriched) {
+    const delta = d.enriched_count - prevEnriched;
+    logEntries.unshift({
+      ts, src: 'enrich',
+      msg: `<span class="g">+${delta}</span> paintings enriched — <span class="n">${fmt(d.enriched_count)}</span> total (${d.enrich_pct}%)`
+    });
+  }
+
   if (prevEmbedded !== null && d.embedded_count > prevEmbedded) {
     const delta = d.embedded_count - prevEmbedded;
     logEntries.unshift({
@@ -415,6 +449,7 @@ function render(d) {
   if (logEntries.length > 50) logEntries.length = 50;
   renderLog();
   prevScored = d.scored_count;
+  prevEnriched = d.enriched_count;
   prevEmbedded = d.embedded_count;
 }
 

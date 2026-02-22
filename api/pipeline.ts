@@ -36,6 +36,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Likes count
   const likesCount = await redis.scard('stv:likes')
 
+  // Enrichment: tracked via stv:enriched SET
+  const enrichedCount = await redis.scard('stv:enriched')
+
+  // Search vocabulary
+  const searchVocabCount = await redis.hlen('stv:search_vocab')
+
+  // Tag index sample counts (how many paintings have each tag type)
+  const [subjectPortrait, subjectLandscape, subjectAbstract, moodSerene, moodDramatic, mediumOil, colorBlue, colorWarm] = await Promise.all([
+    redis.zcard('stv:idx:subject:portrait'),
+    redis.zcard('stv:idx:subject:landscape'),
+    redis.zcard('stv:idx:subject:abstract'),
+    redis.zcard('stv:idx:mood:serene'),
+    redis.zcard('stv:idx:mood:dramatic'),
+    redis.zcard('stv:idx:medium:oil'),
+    redis.zcard('stv:idx:color:blue'),
+    redis.zcard('stv:idx:color:warm'),
+  ])
+
   // Vector index status
   let vecIndexReady = false
   try {
@@ -67,6 +85,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     price_median: parseFloat(raw.price_median) || 0,
     embedded_count: embeddedCount,
     embed_pct: totalListings > 0 ? Math.round(embeddedCount / totalListings * 100) : 0,
+    enriched_count: enrichedCount,
+    enrich_pct: totalListings > 0 ? Math.round(enrichedCount / totalListings * 100) : 0,
+    search_vocab_count: searchVocabCount,
+    tag_indexes: {
+      portrait: subjectPortrait,
+      landscape: subjectLandscape,
+      abstract: subjectAbstract,
+      serene: moodSerene,
+      dramatic: moodDramatic,
+      oil: mediumOil,
+      blue: colorBlue,
+      warm: colorWarm,
+    },
     likes_count: likesCount,
     vec_index_ready: vecIndexReady,
   }
